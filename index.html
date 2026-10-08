@@ -219,8 +219,7 @@
     #teaser-anim.apps #t-scene { opacity: .16; }
     #teaser-anim .t-head { position: absolute; top: 4.5%; left: 0; pointer-events: none; z-index: 12;
       transform: translateX(-50%); transition: opacity .45s ease; text-align: center;
-      line-height: 1.15; text-wrap: balance;
-      font-family: "Times New Roman", Times, Georgia, serif; font-weight: 700;
+      line-height: 1.15; text-wrap: balance; font-weight: 700;
       font-size: clamp(.74rem, 1.6vw, 1.35rem); color: var(--h, var(--fg));
       text-shadow: 0 0 6px var(--tile-bg), 0 0 12px var(--tile-bg), 0 0 18px var(--tile-bg); }
     #teaser-anim .t-head.out { opacity: 0; }
@@ -252,7 +251,6 @@
       box-shadow: 0 4px 14px rgba(0, 0, 0, .14); opacity: 0; transition: opacity .3s ease; }
     #teaser-anim .t-slot .t-shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
     #teaser-anim .t-stitle { position: absolute; left: 50%; transform: translateX(-50%); top: 5%;
-      font-family: "Times New Roman", Times, Georgia, serif;
       font-weight: 700; color: var(--c); font-size: clamp(.46rem, .78vw, .7rem); padding: .05em .5em;
       border-radius: 999px; background: var(--t-props); white-space: nowrap; }
     #teaser-anim .t-props { position: absolute; left: 50%; transform: translateX(-50%); bottom: 5%;
@@ -273,8 +271,8 @@
       grid-template-columns: repeat(2, minmax(0, 1fr));
       grid-template-rows: auto repeat(2, minmax(0, 1fr));
       gap: 2.2%; pointer-events: none; }
-    #teaser-anim .t-apps-head { grid-column: 1 / -1; margin: 0 0 0.1rem; text-align: center;
-      font-family: "Times New Roman", Times, Georgia, serif; font-weight: 700;
+    #teaser-anim .t-apps-head { grid-column: 1 / -1; margin: 0 0 0.35rem; text-align: center;
+      font-weight: 700;
       font-size: clamp(.82rem, 1.55vw, 1.25rem); color: var(--fg);
       opacity: 0; transform: translateY(8px);
       transition: opacity .5s ease, transform .5s ease; }
@@ -283,13 +281,12 @@
       width: 100%; height: 100%;
       display: flex; flex-direction: column; align-items: center;
       justify-content: flex-start; background: var(--t-panel);
-      border-radius: 10px; padding: 1.4%;
+      border-radius: 10px; padding: 0.45rem 0.5rem 0.5rem;
       opacity: 0; transform: translateY(12px);
       transition: opacity .55s ease, transform .55s ease; }
-    #teaser-anim .t-app figcaption { flex: 0 0 auto; margin: 0 0 1.2%; text-align: center;
-      line-height: 1.12; color: var(--fg);
-      font-family: "Times New Roman", Times, Georgia, serif; font-weight: 700;
-      font-size: clamp(.56rem, 1.05vw, .92rem); }
+    #teaser-anim .t-app figcaption { flex: 0 0 auto; width: 100%; margin: 0 0 0.35rem;
+      text-align: center; line-height: 1.15; color: var(--fg); font-weight: 700;
+      font-size: clamp(.58rem, 1.0vw, .86rem); }
     /* bounded by BOTH axes rather than stretched by flex: the panel keeps
        its own aspect and takes whichever limit binds */
     /* ONE fill, and it belongs to the tile. Three of the panels now draw
@@ -298,7 +295,7 @@
        the two are seamless. No border or shadow on the art itself. */
     #teaser-anim .t-app img { min-height: 0; min-width: 0; max-width: 100%;
       max-height: 100%; width: auto; height: auto; object-fit: contain;
-      border: none; box-shadow: none; }
+      margin: auto; border: none; box-shadow: none; }
     #teaser-anim .t-app.on { opacity: 1; transform: none; }
     #teaser-anim .t-app img { max-width: 100%; max-height: 100%; width: auto; height: auto; display: block; }
     #teaser-anim .t-still { display: none; }
@@ -818,7 +815,7 @@
 </script>
 
 <script type="module" src="./static/js/viewer.js?v=10"></script>
-<script type="module" src="./static/js/teaser.js?v=19"></script>
+<script type="module" src="./static/js/teaser.js?v=20"></script>
 
 </body>
 </html>
