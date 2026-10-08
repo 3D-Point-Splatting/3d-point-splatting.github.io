@@ -1140,7 +1140,7 @@ function boot() {
     await frame(); await frame();
     Object.assign(fly.style, { left: (tr.left - st.left) + 'px', top: (tr.top - st.top) + 'px',
       width: tr.width + 'px', height: tr.height + 'px', borderRadius: '8px', borderWidth: '2px' });
-    try { await hold(1050, id); } finally {
+    try { await hold(700, id); } finally {
       s.querySelector('img').src = url;
       s.classList.add('on');
       fly.remove();
@@ -1165,8 +1165,8 @@ function boot() {
   };
   const addMarks = async (names, id) => {
     for (const nm of names) {
-      await tween(780, id, (t) => { P.show[nm] = t; }, ease.lin);
-      await hold(160, id);
+      await tween(450, id, (t) => { P.show[nm] = t; }, ease.lin);
+      await hold(100, id);
     }
   };
   const CH = [
@@ -1182,35 +1182,35 @@ function boot() {
     { // 1 Ray tracing
       async play(id) {
         await head('Prior Methods: Mesh + MC Ray-Tracing', RED, id);
-        await camTo(VIEWS.shot, 900, id);      // a no-op unless the user skipped in
-        await tween(2900, id, (t) => { S.rt.r = t * M.rmax * 0.78; }, ease.lin);
-        await tween(1500, id, (t) => { S.rt.paths = t; }, ease.lin);
+        await camTo(VIEWS.shot, 250, id);      // a no-op unless the user skipped in
+        await tween(1300, id, (t) => { S.rt.r = t * M.rmax * 0.78; }, ease.lin);
+        await tween(700, id, (t) => { S.rt.paths = t; }, ease.lin);
         pCard.classList.add('on');
-        await hold(350, id);
+        await hold(150, id);
         await addMarks(['Sionna-RT', 'mmIR'], id);
-        await hold(450, id);
+        await hold(200, id);
         await dockFly('mc', id);
-        await tween(500, id, (t) => { S.rt.r = M.rmax * 0.78 * (1 - t); S.rt.paths = 1 - t; });
+        await tween(250, id, (t) => { S.rt.r = M.rmax * 0.78 * (1 - t); S.rt.paths = 1 - t; });
       },
       finish() { P.show['Sionna-RT'] = P.show.mmIR = 1; pCard.classList.add('on'); dockInstant('mc'); S.rt = { r: 0, paths: 0 }; S.cam = VIEWS.shot; },
     },
     { // 2 Splatting
       async play(id) {
         await head('Prior Methods: NeRF/3DGS Primitives', RED, id);
-        await camTo(VIEWS.shot, 900, id);      // a no-op unless the user skipped in
-        await tween(1900, id, (t) => { S.gs.grow = t * 1.6; }, ease.lin);
-        await hold(400, id);
-        await camTo(VIEWS.bev, 2200, id);
-        await tween(2200, id, (t) => { S.gs.drop = t; S.gs.fan = Math.max(0, (t - 0.35) / 0.65); }, ease.lin);
-        await tween(900, id, (t) => { S.gs.fade = 0.55 * t; });
+        await camTo(VIEWS.shot, 250, id);      // a no-op unless the user skipped in
+        await tween(800, id, (t) => { S.gs.grow = t * 1.6; }, ease.lin);
+        await hold(200, id);
+        await camTo(VIEWS.bev, 1000, id);
+        await tween(900, id, (t) => { S.gs.drop = t; S.gs.fan = Math.max(0, (t - 0.35) / 0.65); }, ease.lin);
+        await tween(500, id, (t) => { S.gs.fade = 0.55 * t; });
         await addMarks(['DART', 'Radar Fields', 'RadarSplat'], id);
-        await hold(400, id);
-        await tween(800, id, (t) => { S.gs.fan = 1 - t; S.gs.drop = 1 - t;
+        await hold(100, id);
+        await tween(500, id, (t) => { S.gs.fan = 1 - t; S.gs.drop = 1 - t;
                                       S.gs.fade = 0.55 * (1 - t); }, ease.lin);
-        await camTo(VIEWS.shot, 1200, id);
-        await hold(250, id);
+        await camTo(VIEWS.shot, 700, id);
+        await hold(150, id);
         await dockFly('inr', id);
-        await tween(500, id, (t) => { S.gs.fade = t; });
+        await tween(300, id, (t) => { S.gs.fade = t; });
         S.gs = { grow: 0, drop: 0, fan: 0, fade: 0 };
       },
       finish() { ['DART', 'Radar Fields', 'RadarSplat'].forEach((n) => { P.show[n] = 1; }); dockInstant('inr');
@@ -1219,35 +1219,35 @@ function boot() {
     { // 3 3DPS: five beats, each held on its end state before the next
       async play(id) {
         await head('3DPS: Point Primitives', GREEN, id);
-        await camTo(VIEWS.shot, 900, id);      // a no-op: act 2 panned back here
+        await camTo(VIEWS.shot, 250, id);      // a no-op: act 2 panned back here
         // 1 the points
-        await tween(1700, id, (t) => { S.pts.frac = t; }, ease.out);
-        await hold(900, id);
+        await tween(1400, id, (t) => { S.pts.frac = t; }, ease.out);
+        await hold(600, id);
         // 2 every range shell appears, faint...
-        await tween(900, id, (t) => { S.pts.shells = t; }, ease.out);
-        await hold(800, id);
+        await tween(600, id, (t) => { S.pts.shells = t; }, ease.out);
+        await hold(400, id);
         //   ...one bright shell runs out through them, leaving its trace on the scene...
-        await tween(2200, id, (t) => { S.pts.sweep = t; }, ease.lin);
-        await hold(500, id);
+        await tween(1800, id, (t) => { S.pts.sweep = t; }, ease.lin);
+        await hold(300, id);
         //   ...then the shells go, and only the trace stays
-        await tween(800, id, (t) => { S.pts.shellOut = t; }, ease.io);
-        await hold(1000, id);
+        await tween(500, id, (t) => { S.pts.shellOut = t; }, ease.io);
+        await hold(600, id);
         // 3 the points snap onto their own ring, outward
-        await tween(1600, id, (t) => { S.pts.snap = t; }, ease.io);
-        await hold(1300, id);
+        await tween(1500, id, (t) => { S.pts.snap = t; }, ease.io);
+        await hold(1030, id);
         // 4 azimuth and elevation collapse: every point slides along its shell
         //   to the axis (each eases on its own, so the tween is linear), then
         //   the profile
-        await tween(2800, id, (t) => { S.pts.collapse = t; }, ease.lin);
-        await tween(800, id, (t) => { S.pts.prof = t; }, ease.out);
-        await hold(1200, id);
+        await tween(2600, id, (t) => { S.pts.collapse = t; }, ease.lin);
+        await tween(500, id, (t) => { S.pts.prof = t; }, ease.out);
+        await hold(1000, id);
         // 5 the histogram goes and the cloud comes back: the act rests on the
         //   points alone, which is also what the dock tile is a shot of
-        await tween(1400, id, (t) => { S.pts.collapse = 1 - t; S.pts.snap = 1 - t;
+        await tween(1000, id, (t) => { S.pts.collapse = 1 - t; S.pts.snap = 1 - t;
                                        S.pts.fade = t; }, ease.io);
-        await hold(800, id);
+        await hold(400, id);
         await addMarks(['3DPS'], id);
-        await hold(450, id);
+        await hold(250, id);
         await dockFly('pts', id);
       },
       finish() { P.show['3DPS'] = 1; dockInstant('pts'); S.pts = PTSF(); S.cam = VIEWS.shot; },
