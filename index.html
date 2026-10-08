@@ -192,7 +192,7 @@
        always in front; the scene is framed in the space between them. */
     #teaser-anim { --t-red: #c0392b; --t-green: #1e8a3c; --t-card: rgba(245, 245, 247, 0.72);
                    --t-card-line: rgba(31, 32, 36, 0.10); --t-props: rgba(255, 255, 255, 0.86);
-                   --t-pad: 1.1%; --t-card-w: 33%; --t-card-ar: 1.22; }
+                   --t-pad: 1.1%; --t-card-w: 36%; --t-card-h: 64%; --t-dock-h: 28%; }
     :root[data-theme="dark"] #teaser-anim { --t-red: #f0705f; --t-green: #6fd08a;
       --t-card: rgba(26, 26, 30, 0.70); --t-card-line: rgba(232, 232, 236, 0.12); --t-props: rgba(22, 23, 27, 0.84); }
     @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) #teaser-anim { --t-red: #f0705f;
@@ -205,15 +205,13 @@
     #teaser-anim.apps #t-scene { opacity: .16; }
     #teaser-anim .t-head { position: absolute; top: 4.5%; left: 0; pointer-events: none; z-index: 12;
       transform: translateX(-50%); transition: opacity .45s ease; text-align: center;
-      text-wrap: balance; line-height: 1.15;
+      line-height: 1.15; text-wrap: balance;
       font-family: "Times New Roman", Times, Georgia, serif; font-weight: 700;
-      font-size: clamp(.72rem, 1.6vw, 1.35rem); color: var(--h, var(--fg));
+      font-size: clamp(.74rem, 1.6vw, 1.35rem); color: var(--h, var(--fg));
       text-shadow: 0 0 6px var(--tile-bg), 0 0 12px var(--tile-bg), 0 0 18px var(--tile-bg); }
     #teaser-anim .t-head.out { opacity: 0; }
-    #teaser-anim .t-pareto { position: absolute; top: var(--t-pad); bottom: var(--t-pad); right: var(--t-pad);
-      width: var(--t-card-w); aspect-ratio: var(--t-card-ar); height: auto;
-      margin-block: auto; max-height: calc(100% - 2 * var(--t-pad));
-      z-index: 10; border-radius: 12px; background: var(--t-card);
+    #teaser-anim .t-pareto { position: absolute; top: var(--t-pad); bottom: auto; right: var(--t-pad);
+      width: var(--t-card-w); height: var(--t-card-h); z-index: 10; border-radius: 12px; background: var(--t-card);
       border: 1px solid var(--t-card-line); -webkit-backdrop-filter: blur(9px) saturate(1.05);
       backdrop-filter: blur(9px) saturate(1.05); box-shadow: 0 8px 26px rgba(0, 0, 0, .12); opacity: 0;
       transform: translateY(-8px) scale(.98); transition: opacity .6s ease, transform .6s ease, box-shadow .6s ease;
@@ -223,13 +221,16 @@
     #teaser-anim .t-ptitle { position: absolute; left: 0; right: 0; top: 3.5%; text-align: center; z-index: 2;
       font-size: clamp(.6rem, .95vw, .82rem); font-weight: 700; color: var(--fg); pointer-events: none; }
     #pareto-wrap { position: absolute; inset: 0; cursor: grab; }
-    #teaser-anim .t-dock { position: absolute; left: var(--t-pad); top: var(--t-pad); bottom: var(--t-pad);
-      display: grid; grid-template-rows: repeat(3, minmax(0, 1fr)); gap: 3%; pointer-events: none;
+    #teaser-anim .t-dock { position: absolute; left: var(--t-pad); right: var(--t-pad); top: auto;
+      bottom: var(--t-pad); height: var(--t-dock-h);
+      display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2%;
+      justify-items: center; pointer-events: none;
       transition: opacity .6s ease; z-index: 4; }
     #teaser-anim.apps .t-dock { opacity: 0; }
-    #teaser-anim .t-slot { margin: 0; --c: var(--t-red); height: 100%; min-height: 0; }
+    #teaser-anim .t-slot { margin: 0; --c: var(--t-red); height: 100%; min-height: 0;
+                           display: flex; align-items: center; }
     #teaser-anim .t-slot[data-fam="pts"] { --c: var(--t-green); }
-    #teaser-anim .t-slot .t-shot { position: relative; height: 100%; aspect-ratio: 4 / 3; border-radius: 8px;
+    #teaser-anim .t-slot .t-shot { position: relative; height: 100%; width: auto; aspect-ratio: 4 / 3; border-radius: 8px;
       overflow: hidden; border: 2px solid var(--c); background: var(--tile-bg);
       box-shadow: 0 4px 14px rgba(0, 0, 0, .14); opacity: 0; transition: opacity .3s ease; }
     #teaser-anim .t-slot .t-shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -270,25 +271,10 @@
     #teaser-anim.no-webgl .t-still { display: block; }
     #teaser-anim.no-webgl .t-still img { width: 100%; height: auto; display: block; }
     @media (max-width: 760px) {
-      #teaser-anim { --t-card-w: calc(100% - 2 * var(--t-pad)); --t-pad: 2%; }
-      #teaser-anim .t-stage { aspect-ratio: 3 / 4; }
+      #teaser-anim .t-stage { aspect-ratio: 16 / 9; }
+      #teaser-anim { --t-card-w: 42%; --t-card-h: 58%; --t-dock-h: 30%; }
       #teaser-anim .t-props { display: none; }
-      /* title across the top, in its own band */
-      #teaser-anim .t-head { top: 1.5%; left: 50% !important; width: 92%;
-                             font-size: clamp(.7rem, 3.4vw, 1rem); }
-      /* the plot takes the middle, full width */
-      #teaser-anim .t-pareto { top: 12%; bottom: auto; left: var(--t-pad);
-                               right: var(--t-pad); width: auto;
-                               aspect-ratio: 1.15; margin-block: 0; max-height: 52%; }
-      /* the three shots become a row along the bottom */
-      #teaser-anim .t-dock { left: var(--t-pad); right: var(--t-pad); top: auto;
-                             bottom: var(--t-pad); height: 26%;
-                             grid-template-rows: none;
-                             grid-template-columns: repeat(3, minmax(0, 1fr));
-                             gap: 2%; }
-      #teaser-anim .t-slot .t-shot { aspect-ratio: auto; width: 100%; }
-      #teaser-anim .t-apps { right: var(--t-pad); top: 12%;
-                             grid-template-rows: auto repeat(2, minmax(0, 1fr)); }
+      #teaser-anim .t-head { font-size: clamp(.6rem, 2.1vw, .9rem); }
     }
 
     /* theme toggle */
@@ -782,7 +768,7 @@
 </script>
 
 <script type="module" src="./static/js/viewer.js?v=8"></script>
-<script type="module" src="./static/js/teaser.js?v=12"></script>
+<script type="module" src="./static/js/teaser.js?v=13"></script>
 
 </body>
 </html>

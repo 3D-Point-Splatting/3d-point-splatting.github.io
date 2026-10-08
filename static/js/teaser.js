@@ -515,7 +515,7 @@ function boot() {
   // the final state of each chapter, for a tile re-render after a theme flip
   const FINAL = {
     mc: () => ({ cam: VIEWS.rt, rt: { r: M.rmax * 0.78, paths: 1 }, gs: { grow: 0, drop: 0, fan: 0, fade: 0 }, pts: { frac: 0, path: 0 } }),
-    inr: () => ({ cam: VIEWS.bev, rt: { r: 0, paths: 0 }, gs: { grow: 1, drop: 1, fan: 1, fade: 0.55 }, pts: { frac: 0, path: 0 } }),
+    inr: () => ({ cam: VIEWS.gs, rt: { r: 0, paths: 0 }, gs: { grow: 1.6, drop: 0, fan: 0, fade: 0 }, pts: { frac: 0, path: 0 } }),
     pts: () => ({ cam: VIEWS.pts, rt: { r: 0, paths: 0 }, gs: { grow: 0, drop: 0, fan: 0, fade: 0 }, pts: { frac: 1, path: 1 } }),
   };
   function cropRect() {                              // stage px: 4:3 at full height, centred on the band
@@ -759,8 +759,12 @@ function boot() {
         await tween(900, id, (t) => { S.gs.fade = 0.55 * t; });
         await addMarks(['DART', 'Radar Fields', 'RadarSplat'], id);
         await hold(400, id);
+        await tween(800, id, (t) => { S.gs.fan = 1 - t; S.gs.drop = 1 - t;
+                                      S.gs.fade = 0.55 * (1 - t); }, ease.lin);
+        await camTo(VIEWS.gs, 1200, id);
+        await hold(250, id);
         await dockFly('inr', id);
-        await tween(500, id, (t) => { S.gs.fade = 0.55 + 0.45 * t; S.gs.fan = 1 - t; });
+        await tween(500, id, (t) => { S.gs.fade = t; });
         S.gs = { grow: 0, drop: 0, fan: 0, fade: 0 };
       },
       finish() { ['DART', 'Radar Fields', 'RadarSplat'].forEach((n) => { P.show[n] = 1; }); dockInstant('inr');
@@ -854,28 +858,19 @@ function boot() {
   let midX = 0.5;                                    // centre of the free band, as a stage fraction
   function resize() {
     const w = sceneWrap.clientWidth, h = sceneWrap.clientHeight;
-    const stacked = window.matchMedia('(max-width: 760px)').matches;
     if (w && h) {
       renderer.setSize(w, h, false); camera.aspect = w / h;
-      if (stacked) {
-        // the dock and the card sit ABOVE and BELOW the scene, not beside
-        // it, so there is no free band to bias the projection into
-        midX = 0.5;
-        camera.clearViewOffset();
-        headEl.style.maxWidth = '';
-      } else {
-        const st = stage.getBoundingClientRect(), cd = pCard.getBoundingClientRect();
-        const left = Math.max(st.left, ...[...dockEl.querySelectorAll('.t-shot')].map((e) => e.getBoundingClientRect().right)) - st.left;
-        const band = (cd.left - st.left) - left;
-        midX = ((left + (cd.left - st.left)) / 2) / st.width;
-        // shift the projection so the scene's centre sits in the middle of the free band
-        camera.setViewOffset(w, h, -(midX - 0.5) * w, 0, w, h);
-        headEl.style.left = (midX * 100) + '%';
-        // and keep the title INSIDE that band: it used to be nowrap, so a
-        // long one ran underneath the dock and the card
-        headEl.style.maxWidth = Math.max(80, band - 12) + 'px';
-      }
+      const st = stage.getBoundingClientRect(), cd = pCard.getBoundingClientRect();
+      const band = Math.max(1, cd.left - st.left);
+      const dockH = dockEl.getBoundingClientRect().height;
+      midX = (band / 2) / st.width;
+      // centre the scene in the band left of the card, and lift it clear of
+      // the row of shots along the bottom
+      camera.setViewOffset(w, h, -(midX - 0.5) * w, dockH / 2, w, h);
       camera.updateProjectionMatrix();
+      headEl.style.left = (midX * 100) + '%';
+      // keep the title inside that band whatever the string length
+      headEl.style.maxWidth = Math.max(90, band - 22) + 'px';
     }
     const pw = pWrap.clientWidth, ph = pWrap.clientHeight;
     if (pw && ph) {
