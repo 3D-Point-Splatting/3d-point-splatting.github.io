@@ -213,9 +213,9 @@ function boot() {
   // ── state ──────────────────────────────────────────────────────────────
   // the 3DPS act, one scalar per beat: 1 frac; 2 shells (all appear), sweep
   // (one bright shell runs through them, leaving its trace), shellOut;
-  // 3 snap (+ amp); 4 collapse (+ prof); 5 fade
-  const PTS0 = () => ({ frac: 0, shells: 0, sweep: 0, shellOut: 0, snap: 0, amp: 0, collapse: 0, prof: 0, fade: 0 });
-  const PTSF = () => ({ frac: 1, shells: 1, sweep: 1, shellOut: 1, snap: 0, amp: 1, collapse: 0, prof: 0, fade: 1 });
+  // 3 snap; 4 collapse (+ prof); 5 fade
+  const PTS0 = () => ({ frac: 0, shells: 0, sweep: 0, shellOut: 0, snap: 0, collapse: 0, prof: 0, fade: 0 });
+  const PTSF = () => ({ frac: 1, shells: 1, sweep: 1, shellOut: 1, snap: 0, collapse: 0, prof: 0, fade: 1 });
   const fresh = () => ({ cam: null, rt: { r: 0, paths: 0 }, gs: { grow: 0, drop: 0, fan: 0, fade: 0 },
                          pts: PTS0() });
   let S = fresh();
@@ -573,7 +573,8 @@ function boot() {
 
     // ── three position sets the cloud morphs through ────────────────────
     const a0 = new Float32Array(N * 3), a1 = new Float32Array(N * 3), a2 = new Float32Array(N * 3);
-    const bright = new Float32Array(N), amp = new Float32Array(N);
+    const dir = new Float32Array(N * 3), rad = new Float32Array(N), dly = new Float32Array(N);
+    const amp = new Float32Array(N);
     const binOf = new Int32Array(N), rbOf = new Float32Array(N);
     const d = new THREE.Vector3();
     order.forEach((o, i) => {
@@ -585,9 +586,11 @@ function boot() {
       binOf[i] = k; rbOf[i] = o.rb;
       d.subVectors(o.p, M.o).normalize();
       M.o.clone().addScaledVector(d, k * RB).addScaledVector(o.nf, 0.03).toArray(a1, 3 * i);
-      // brightness: the two-way antenna gain, relative to the best-lit point;
-      // -24 dB and below is the floor
-      bright[i] = s2l(Math.max(0.3, 1 + (o.g - gmax) / 30));
+      d.toArray(dir, 3 * i); rad[i] = k * RB;
+      // the collapse folds the fan in from its edges: a point starts the
+      // sooner the further it sits from the boresight
+      const off = Math.acos(Math.max(-1, Math.min(1, d.dot(M.bo))));
+      dly[i] = 0.25 * (1 - Math.min(1, off / (M.halfAz * 1.1)));
     });
     // ...and then onto the axis, where they STACK inside their own bin: the
     // collapse over azimuth and elevation IS the sum, so the pile height is it.
@@ -604,11 +607,12 @@ function boot() {
       // 54% of a bin wide, so the columns stand apart and you can count them
       const jx = (((i * 2654435761) % 1013) / 1013 - 0.5) * RB * 0.54;
       const jz = (((i * 40503) % 1009) / 1009 - 0.5) * RB * 0.54;
-      base(k * RB + jz).addScaledVector(M.up, h).addScaledVector(M.ax, jx)
+      // its slot in the column, relative to the ring's point on the axis
+      new THREE.Vector3().addScaledVector(M.bo, jz).addScaledVector(M.up, h).addScaledVector(M.ax, jx)
         .toArray(a2, 3 * i);
     }
-    PT.a0 = a0; PT.a1 = a1; PT.a2 = a2; PT.bright = bright; PT.rb = rbOf; PT.bin = binOf;
-    PT.n = N; PT.mk = null; PT.lit = null;
+    PT.a0 = a0; PT.a1 = a1; PT.a2 = a2; PT.dir = dir; PT.rad = rad; PT.dly = dly;
+    PT.rb = rbOf; PT.bin = binOf; PT.n = N; PT.mk = null;
     PT.pink = new THREE.Color(C.pts);
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(a0.slice(), 3));
@@ -619,7 +623,15 @@ function boot() {
     g.attributes.color.setUsage(THREE.DynamicDrawUsage);
     PT.points = new THREE.Points(g, new THREE.PointsMaterial({
       color: 0xffffff, size: 0.075, map: sprite, alphaTest: 0.5, vertexColors: true }));
-    G.pts.add(PT.points);
+    // The boresight axis runs INSIDE the staircase, so a point that has slid
+    // onto it fails the depth test and vanishes. A second draw of the same
+    // cloud without the depth test crossfades in over the first part of the
+    // collapse (and back out at the end), so nothing pops.
+    PT.points2 = new THREE.Points(g, new THREE.PointsMaterial({
+      color: 0xffffff, size: 0.075, map: sprite, alphaTest: 0.5, vertexColors: true,
+      transparent: true, opacity: 0, depthTest: false, depthWrite: false }));
+    PT.points2.renderOrder = 5; PT.points2.visible = false;
+    G.pts.add(PT.points, PT.points2);
 
     // ── the shells: ALL of them, as the rim of each field-of-view cap, faint;
     //    and ONE bright shell that runs out through them ──────────────────
@@ -833,7 +845,7 @@ function boot() {
     // points
     const pt = st.pts;
     G.pts.visible = pt.frac > 0;
-    if (G.pts.visible) PT.points.geometry.setDrawRange(0, Math.floor(PT.n * pt.frac));
+    if (G.pts.visible) PT.points.geometry.setDrawRange(0, Math.floor(PT.n * pt.frac));   // shared geometry
     const rig = 1 - pt.fade;                 // everything but the points, at the end
     G.pth.visible = pt.frac > 0 && rig > 0.002;
     MARK.uMark.value = 0;
@@ -869,38 +881,53 @@ function boot() {
       MARK.uKmax.value = kf;
 
       // ── beat 3: the points snap onto their own ring, outward ─────────────
-      // ── beat 4: and only then does azimuth and elevation collapse, the
-      //    points stacking into their ring's column ─────────────────────────
+      // ── beat 4: and only then does azimuth and elevation collapse: every
+      //    point slides ALONG ITS OWN SHELL to the boresight (range kept),
+      //    rising into its slot in the ring's column as it arrives ──────────
       const snFront = RTOP * 1.06 * pt.snap, SOFT = RB * 4;
       const mk = pt.snap * 1e3 + pt.collapse;
       if (mk !== PT.mk) {
         PT.mk = mk;
         const a = PT.points.geometry.attributes.position, v = a.array, co = pt.collapse;
+        const ox = M.o.x, oy = M.o.y, oz = M.o.z, bx = M.bo.x, by = M.bo.y, bz = M.bo.z;
+        const A0 = PT.a0, A1 = PT.a1, A2 = PT.a2, DR = PT.dir, RD = PT.rad, DL = PT.dly, RB_ = PT.rb;
         for (let i = 0, n = PT.n; i < n; i++) {
-          const w = Math.max(0, Math.min(1, (snFront - PT.rb[i]) / SOFT));
-          for (let c = 3 * i; c < 3 * i + 3; c++) {
-            const q = PT.a0[c] + (PT.a1[c] - PT.a0[c]) * w;
-            v[c] = q + (PT.a2[c] - q) * co;
+          const w = Math.max(0, Math.min(1, (snFront - RB_[i]) / SOFT));
+          const i3 = 3 * i;
+          let x = A0[i3] + (A1[i3] - A0[i3]) * w;
+          let y = A0[i3 + 1] + (A1[i3 + 1] - A0[i3 + 1]) * w;
+          let z = A0[i3 + 2] + (A1[i3 + 2] - A0[i3 + 2]) * w;
+          if (co > 0) {
+            // the point's own progress, eased, after its delay
+            let u = Math.max(0, Math.min(1, (co - DL[i]) / 0.75));
+            u = u * u * (3 - 2 * u);
+            // direction swung towards the boresight (normalised lerp), range kept
+            let dx = DR[i3] + (bx - DR[i3]) * u, dy = DR[i3 + 1] + (by - DR[i3 + 1]) * u, dz = DR[i3 + 2] + (bz - DR[i3 + 2]) * u;
+            const L = RD[i] / Math.sqrt(dx * dx + dy * dy + dz * dz);
+            // the slot offset comes in with the same ease, so the point lifts
+            // into its column as it arrives on the axis
+            const px = ox + dx * L + A2[i3] * u, py = oy + dy * L + A2[i3 + 1] * u, pz = oz + dz * L + A2[i3 + 2] * u;
+            // measured from the ring position, so the snap and the collapse
+            // compose (both run back together at the end of the act)
+            const rx = ox + DR[i3] * RD[i], ry = oy + DR[i3 + 1] * RD[i], rz = oz + DR[i3 + 2] * RD[i];
+            x += px - rx; y += py - ry; z += pz - rz;
           }
+          v[i3] = x; v[i3 + 1] = y; v[i3 + 2] = z;
         }
         a.needsUpdate = true;
-        PT.points.material.depthTest = co < 0.02;
         // a 7.5 cm sprite would smear right across a bin: a snapped point is a
         // fifth smaller so the rings keep a gap between them, and a column
         // point a good deal smaller again
-        PT.points.material.size = 0.075 * (1 - 0.2 * Math.min(1, pt.snap * 1.5)) * (1 - 0.6 * co);
-        PT.points.material.opacity = 1 - 0.65 * co;
-        PT.points.material.transparent = true;
-      }
-      // each point lit by the two-way antenna gain at its direction
-      if (pt.amp !== PT.lit) {
-        PT.lit = pt.amp;
-        const cc = PT.points.geometry.attributes.color, cv = cc.array, pk = PT.pink;
-        for (let i = 0, n = PT.n; i < n; i++) {
-          const b = 1 + (PT.bright[i] - 1) * pt.amp;
-          cv[3 * i] = pk.r * b; cv[3 * i + 1] = pk.g * b; cv[3 * i + 2] = pk.b * b;
-        }
-        cc.needsUpdate = true;
+        const sz = 0.075 * (1 - 0.2 * Math.min(1, pt.snap * 1.5)) * (1 - 0.6 * co), op = 1 - 0.65 * co;
+        let s = Math.min(1, co / 0.15); s = s * s * (3 - 2 * s);        // depth-tested -> untested
+        // The sprite is mip-mapped: at this size its centre alpha samples at
+        // ~0.6, so a fixed alphaTest of 0.5 discards every sprite once the
+        // opacity is below ~0.8. The test follows the opacity instead.
+        const m1 = PT.points.material, m2 = PT.points2.material;
+        m1.size = sz; m1.opacity = op * (1 - s); m1.alphaTest = Math.max(0.01, 0.45 * m1.opacity); m1.transparent = true;
+        PT.points.visible = s < 0.999;
+        m2.size = sz; m2.opacity = op * s; m2.alphaTest = Math.max(0.01, 0.45 * m2.opacity);
+        PT.points2.visible = s > 0.001;
       }
 
       const axA = 0.85 * Math.min(1, pt.collapse * 4) * rig;
@@ -1208,16 +1235,15 @@ function boot() {
         // 3 the points snap onto their own ring, outward
         await tween(1600, id, (t) => { S.pts.snap = t; }, ease.io);
         await hold(1300, id);
-        // 4 each point lit by the two-way antenna gain at its direction, then
-        //   azimuth and elevation collapse: the histogram, then the profile
-        await tween(700, id, (t) => { S.pts.amp = t; }, ease.out);
-        await hold(500, id);
-        await tween(1600, id, (t) => { S.pts.collapse = t; }, ease.io);
+        // 4 azimuth and elevation collapse: every point slides along its shell
+        //   to the axis (each eases on its own, so the tween is linear), then
+        //   the profile
+        await tween(2800, id, (t) => { S.pts.collapse = t; }, ease.lin);
         await tween(800, id, (t) => { S.pts.prof = t; }, ease.out);
         await hold(1200, id);
         // 5 the histogram goes and the cloud comes back: the act rests on the
         //   points alone, which is also what the dock tile is a shot of
-        await tween(1000, id, (t) => { S.pts.collapse = 1 - t; S.pts.snap = 1 - t;
+        await tween(1400, id, (t) => { S.pts.collapse = 1 - t; S.pts.snap = 1 - t;
                                        S.pts.fade = t; }, ease.io);
         await hold(800, id);
         await addMarks(['3DPS'], id);
@@ -1289,7 +1315,8 @@ function boot() {
     mesh.material.color.setHex(C.mesh);
     buildRadar();
     RT.lines.material.color.setHex(C.ray); RT.hits.material.color.setHex(C.ray); RT.wave.material.color.setHex(C.wave);
-    PT.pink = new THREE.Color(C.pts); PT.lit = null;
+    PT.pink = new THREE.Color(C.pts);
+    if (PT.points) { const cc = PT.points.geometry.attributes.color; /* shared with points2 */ for (let i = 0; i < PT.n; i++) PT.pink.toArray(cc.array, 3 * i); cc.needsUpdate = true; }
     if (PT.profMat) PT.profMat.color.setHex(profHex());
     if (PT.axisMat) PT.axisMat.color.setHex(axisHex());
     if (PT.origin) PT.origin.material.color.setHex(axisHex());
