@@ -192,7 +192,8 @@
        always in front; the scene is framed in the space between them. */
     #teaser-anim { --t-red: #c0392b; --t-green: #1e8a3c; --t-card: rgba(245, 245, 247, 0.72);
                    --t-card-line: rgba(31, 32, 36, 0.10); --t-props: rgba(255, 255, 255, 0.86);
-                   --t-pad: 1.1%; --t-card-w: 36%; --t-card-h: 64%; --t-dock-h: 28%; }
+                   --t-pad: 1.1%; --t-card-w: 36%; --t-card-h: 64%;
+                   --t-dock-h: 28%; --t-shot-ar: 4 / 3; }
     :root[data-theme="dark"] #teaser-anim { --t-red: #f0705f; --t-green: #6fd08a;
       --t-card: rgba(26, 26, 30, 0.70); --t-card-line: rgba(232, 232, 236, 0.12); --t-props: rgba(22, 23, 27, 0.84); }
     @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) #teaser-anim { --t-red: #f0705f;
@@ -230,16 +231,18 @@
     #teaser-anim .t-slot { margin: 0; --c: var(--t-red); height: 100%; min-height: 0;
                            display: flex; align-items: center; }
     #teaser-anim .t-slot[data-fam="pts"] { --c: var(--t-green); }
-    #teaser-anim .t-slot .t-shot { position: relative; height: 100%; width: auto; aspect-ratio: 4 / 3; border-radius: 8px;
+    #teaser-anim .t-slot .t-shot { position: relative; height: 100%; width: auto; aspect-ratio: var(--t-shot-ar); border-radius: 8px;
       overflow: hidden; border: 2px solid var(--c); background: var(--tile-bg);
       box-shadow: 0 4px 14px rgba(0, 0, 0, .14); opacity: 0; transition: opacity .3s ease; }
     #teaser-anim .t-slot .t-shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    #teaser-anim .t-stitle { position: absolute; left: 5%; top: 5%; font-family: "Times New Roman", Times, Georgia, serif;
+    #teaser-anim .t-stitle { position: absolute; left: 50%; transform: translateX(-50%); top: 5%;
+      font-family: "Times New Roman", Times, Georgia, serif;
       font-weight: 700; color: var(--c); font-size: clamp(.46rem, .78vw, .7rem); padding: .05em .5em;
       border-radius: 999px; background: var(--t-props); white-space: nowrap; }
-    #teaser-anim .t-props { position: absolute; left: 5%; bottom: 5%; border-radius: 5px; background: var(--t-props);
+    #teaser-anim .t-props { position: absolute; left: 50%; transform: translateX(-50%); bottom: 5%;
+      text-align: center; border-radius: 5px; background: var(--t-props);
       padding: .15em .45em; font-size: clamp(.4rem, .62vw, .58rem); line-height: 1.28; color: var(--fg); }
-    #teaser-anim .t-props span { display: block; white-space: nowrap; }
+    #teaser-anim .t-props span { display: block; white-space: nowrap; text-align: left; }
     #teaser-anim .t-props .ok::before { content: "\2713\00a0"; color: var(--t-green); font-weight: 700; }
     #teaser-anim .t-props .no::before { content: "\00d7\00a0"; color: var(--t-red); font-weight: 700; }
     #teaser-anim .t-slot.on .t-shot { opacity: 1; }
@@ -272,15 +275,22 @@
     #teaser-anim.no-webgl .t-still img { width: 100%; height: auto; display: block; }
     @media (max-width: 760px) {
       #teaser-anim .t-stage { aspect-ratio: 16 / 9; }
-      /* the shots fill their grid column rather than being sized from the
-         row height, which makes them ~39% wider; the row grows to 42% to
-         fit them at 4:3 and the card gives up the height to stay clear */
-      #teaser-anim { --t-card-w: 42%; --t-card-h: 50%; --t-dock-h: 42%; }
-      #teaser-anim .t-slot .t-shot { width: 100%; height: auto; }
-      /* the three properties are the point of the comparison, so they stay */
-      #teaser-anim .t-props { left: 4%; bottom: 4%; padding: .1em .32em;
-                              font-size: clamp(.36rem, 1.55vw, .55rem); line-height: 1.24; }
-      #teaser-anim .t-stitle { left: 4%; top: 4%; padding: .04em .36em;
+      /* the row was 42% of the stage, which is why the tiles looked so
+         tall. 32% with a 3:2 shot makes them WIDER and SHORTER than the
+         4:3-at-42% they replaced (105 x 70 vs 88 x 92 on a 390px stage). */
+      #teaser-anim { --t-card-w: 42%; --t-card-h: 56%;
+                     --t-dock-h: 32%; --t-shot-ar: 3 / 2; }
+      /* the three properties are the comparison the tiles exist to make */
+      /* Sized from a measurement, not a guess. The longest line,
+         "\2713 product-agnostic, complex", renders 90.6px at 6px; the tile
+         only gives 78px of usable width at a 360px viewport and 85px at
+         390px. 1.33vw lands it at ~72 / ~78px, inside both, and wrapping
+         is NOT the answer -- six wrapped lines overflow a 67px tile. */
+      #teaser-anim .t-props { bottom: 4%; padding: .1em .32em;
+                              font-size: clamp(4.4px, 1.33vw, .55rem); line-height: 1.26; }
+      #teaser-anim .t-stitle { max-width: 94%; overflow: hidden; white-space: nowrap;
+                               text-overflow: ellipsis; }
+      #teaser-anim .t-stitle { top: 4%; padding: .04em .36em;
                                font-size: clamp(.34rem, 1.45vw, .52rem); }
       #teaser-anim .t-head { font-size: clamp(.6rem, 2.1vw, .9rem); }
     }
@@ -776,7 +786,7 @@
 </script>
 
 <script type="module" src="./static/js/viewer.js?v=8"></script>
-<script type="module" src="./static/js/teaser.js?v=13"></script>
+<script type="module" src="./static/js/teaser.js?v=14"></script>
 
 </body>
 </html>

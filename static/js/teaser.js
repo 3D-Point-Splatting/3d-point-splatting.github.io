@@ -257,6 +257,10 @@ function boot() {
     VIEWS.bev = { p: flat(bevT.clone().add(new THREE.Vector3(0, 27.0, 0)).addScaledVector(bevUp, -0.8)),
                   t: flat(bevT), u: bevUp.toArray() };
     VIEWS.pts = { p: flat(at(-4.6, 3.4, -3.6)), t: flat(at(5.8, -0.3, 0.6)), u: [0, 1, 0] };
+    // ONE camera for all three docked screenshots, so the tiles differ only
+    // in the primitive, not the viewpoint. Each act pans here before its
+    // shot is taken, and FINAL (the skip path) uses it too.
+    VIEWS.shot = VIEWS.pts;
 
     buildRadar();
     buildRays(meta);
@@ -514,9 +518,9 @@ function boot() {
 
   // the final state of each chapter, for a tile re-render after a theme flip
   const FINAL = {
-    mc: () => ({ cam: VIEWS.rt, rt: { r: M.rmax * 0.78, paths: 1 }, gs: { grow: 0, drop: 0, fan: 0, fade: 0 }, pts: { frac: 0, path: 0 } }),
-    inr: () => ({ cam: VIEWS.gs, rt: { r: 0, paths: 0 }, gs: { grow: 1.6, drop: 0, fan: 0, fade: 0 }, pts: { frac: 0, path: 0 } }),
-    pts: () => ({ cam: VIEWS.pts, rt: { r: 0, paths: 0 }, gs: { grow: 0, drop: 0, fan: 0, fade: 0 }, pts: { frac: 1, path: 1 } }),
+    mc: () => ({ cam: VIEWS.shot, rt: { r: M.rmax * 0.78, paths: 1 }, gs: { grow: 0, drop: 0, fan: 0, fade: 0 }, pts: { frac: 0, path: 0 } }),
+    inr: () => ({ cam: VIEWS.shot, rt: { r: 0, paths: 0 }, gs: { grow: 1.6, drop: 0, fan: 0, fade: 0 }, pts: { frac: 0, path: 0 } }),
+    pts: () => ({ cam: VIEWS.shot, rt: { r: 0, paths: 0 }, gs: { grow: 0, drop: 0, fan: 0, fade: 0 }, pts: { frac: 1, path: 1 } }),
   };
   function cropRect() {                              // stage px: 4:3 at full height, centred on the band
     const W = stage.clientWidth, H = stage.clientHeight, cw = Math.min(W, H * 4 / 3);
@@ -743,6 +747,8 @@ function boot() {
         await hold(350, id);
         await addMarks(['Sionna-RT', 'mmIR'], id);
         await hold(450, id);
+        await camTo(VIEWS.shot, 1200, id);
+        await hold(250, id);
         await dockFly('mc', id);
         await tween(500, id, (t) => { S.rt.r = M.rmax * 0.78 * (1 - t); S.rt.paths = 1 - t; });
       },
@@ -761,7 +767,7 @@ function boot() {
         await hold(400, id);
         await tween(800, id, (t) => { S.gs.fan = 1 - t; S.gs.drop = 1 - t;
                                       S.gs.fade = 0.55 * (1 - t); }, ease.lin);
-        await camTo(VIEWS.gs, 1200, id);
+        await camTo(VIEWS.shot, 1200, id);
         await hold(250, id);
         await dockFly('inr', id);
         await tween(500, id, (t) => { S.gs.fade = t; });
@@ -773,14 +779,14 @@ function boot() {
     { // 3 3DPS
       async play(id) {
         await head('3DPS: Point Primitives', GREEN, id);
-        await camTo(VIEWS.pts, 1700, id);
+        await camTo(VIEWS.shot, 1700, id);
         await tween(2600, id, (t) => { S.pts.frac = t; }, ease.out);
         await tween(1100, id, (t) => { S.pts.path = t; }, ease.lin);
         await addMarks(['3DPS'], id);
         await hold(450, id);
         await dockFly('pts', id);
       },
-      finish() { P.show['3DPS'] = 1; dockInstant('pts'); S.pts = { frac: 1, path: 1 }; S.cam = VIEWS.pts; },
+      finish() { P.show['3DPS'] = 1; dockInstant('pts'); S.pts = { frac: 1, path: 1 }; S.cam = VIEWS.shot; },
     },
     { // 4 Frontier
       async play(id) {
