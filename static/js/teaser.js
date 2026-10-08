@@ -186,7 +186,7 @@ function boot() {
   const MARK = { uO: { value: new THREE.Vector3() }, uTx: { value: new THREE.Vector3() }, uRx: { value: new THREE.Vector3() },
                  uBo: { value: new THREE.Vector3() }, uAx: { value: new THREE.Vector3() }, uEl: { value: new THREE.Vector3() },
                  uDr: { value: 1 }, uHalfAz: { value: 0 }, uHalfEl: { value: 0 }, uMark: { value: 0 }, uKmax: { value: 0 },
-                 uBold: { value: 16 }, uMarkCol: { value: new THREE.Color() } };
+                 uMarkCol: { value: new THREE.Color() } };
   const VIEWS = {};
 
   // ── the plot ───────────────────────────────────────────────────────────
@@ -206,14 +206,16 @@ function boot() {
   const PG = { axes: new THREE.Group(), surf: new THREE.Group(), marks: new THREE.Group() };
   Object.values(PG).forEach((g) => pscene.add(g));
   let pdata = null, marks = new Map(), surfMat = null;
+  let ANT = null;                                    // the MMWCAS element pattern
   let pUserMoved = false;
   pctl.addEventListener('start', () => { pUserMoved = true; });
 
   // ── state ──────────────────────────────────────────────────────────────
-  // the 3DPS act, one scalar per beat: 1 frac, 2 shells then shellOut,
-  // 3 snap (+ amp), 4 collapse (+ prof), 5 fade
-  const PTS0 = () => ({ frac: 0, shells: 0, shellOut: 0, snap: 0, amp: 0, collapse: 0, prof: 0, fade: 0 });
-  const PTSF = () => ({ frac: 1, shells: 1, shellOut: 1, snap: 0, amp: 1, collapse: 0, prof: 0, fade: 1 });
+  // the 3DPS act, one scalar per beat: 1 frac; 2 shells (all appear), sweep
+  // (one bright shell runs through them, leaving its trace), shellOut;
+  // 3 snap (+ amp); 4 collapse (+ prof); 5 fade
+  const PTS0 = () => ({ frac: 0, shells: 0, sweep: 0, shellOut: 0, snap: 0, amp: 0, collapse: 0, prof: 0, fade: 0 });
+  const PTSF = () => ({ frac: 1, shells: 1, sweep: 1, shellOut: 1, snap: 0, amp: 1, collapse: 0, prof: 0, fade: 1 });
   const fresh = () => ({ cam: null, rt: { r: 0, paths: 0 }, gs: { grow: 0, drop: 0, fan: 0, fade: 0 },
                          pts: PTS0() });
   let S = fresh();
@@ -237,9 +239,8 @@ function boot() {
     // The trace a range shell leaves on the scene is the curve where the
     // iso-range surface cuts the mesh. The fragment shader draws it exactly:
     // the bistatic mean range of every fragment, a line wherever it crosses a
-    // bin edge, within the radar's field of view. Every bin gets a fine line
-    // (faded out where the bins are too close to resolve on screen, so there
-    // is no moire), every 16th a bold one, matching the shaded shells.
+    // shell, within the radar's field of view (faded out where the shells are
+    // too close to resolve on screen, so there is no moire).
     mmat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, MARK);
       sh.vertexShader = sh.vertexShader
@@ -248,7 +249,7 @@ function boot() {
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <common>', '#include <common>\nvarying vec3 vWp;\n'
           + 'uniform vec3 uO, uTx, uRx, uBo, uAx, uEl, uMarkCol;\n'
-          + 'uniform float uDr, uHalfAz, uHalfEl, uMark, uKmax, uBold;')
+          + 'uniform float uDr, uHalfAz, uHalfEl, uMark, uKmax;')
         .replace('#include <dithering_fragment>', MARK_GLSL + '\n#include <dithering_fragment>');
     };
     mesh = new THREE.Mesh(mg, mmat);
@@ -476,8 +477,14 @@ function boot() {
   const s2l = (v) => (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
 
   const markHex = () => (theme() === 'dark' ? 0xd4d8e4 : 0x2b2e3a);
-  const altHex = () => (theme() === 'dark' ? 0xeeeaff : 0x4a37d0);   // the odd bins' tint
-  const BOLD = 16;                                   // every 16th shell is shaded
+  // The rings the points form in the range step have to be SEEN, and a 7.5 cm
+  // point sprite cannot show 5.93 cm rings: so the range step, the shells and
+  // the histogram bars are drawn at RF real bins per ring (RF = 1 is the
+  // radar's own grid), and every fitted point is drawn DUP times, the copies
+  // jittered in its tangent plane, so each ring is dense enough to read as
+  // one. The profile curve stays on the real 256-bin grid.
+  const RF = 4, DUP = 5;
+  const RB = RRES * RF, NB = Math.round(NBIN / RF);
   const srgb = (c, hex) => { c.r = ((hex >> 16) & 255) / 255; c.g = ((hex >> 8) & 255) / 255; c.b = (hex & 255) / 255; return c; };
   const MARK_GLSL = `
   {
@@ -489,32 +496,60 @@ function boot() {
     float k = 0.5 * (length(vWp - uTx) + length(vWp - uRx)) / uDr;
     float fw = max(fwidth(k), 1e-4);
     float d = abs(fract(k + 0.5) - 0.5);
-    float w = max(0.55 * fw, 0.02);
-    float fine = (1.0 - smoothstep(w, w + fw, d)) * (1.0 - smoothstep(0.22, 0.45, fw));
-    float kb = k / uBold, fwb = fw / uBold;
-    float db = abs(fract(kb + 0.5) - 0.5);
-    float bold = 1.0 - smoothstep(0.7 * fwb, 1.7 * fwb, db);
+    float w = max(0.6 * fw, 0.02);
+    float line = (1.0 - smoothstep(w, w + fw, d)) * (1.0 - smoothstep(0.22, 0.45, fw));
+    // (drawn at 45% so the pink rings that form on it stay the brighter thing)
     float built = 1.0 - smoothstep(uKmax - 0.5, uKmax + 0.5, k);
-    float m = inside * built * uMark * max(fine * 0.5, bold * 0.72);
-    gl_FragColor.rgb = mix(gl_FragColor.rgb, uMarkCol, m);
+    gl_FragColor.rgb = mix(gl_FragColor.rgb, uMarkCol, inside * built * uMark * line * 0.45);
   }`;
+  // the MMWCAS element pattern (static/data/antenna_mmwcas.json): E-plane cut
+  // against elevation, H-plane cut against azimuth, 1 deg samples with the
+  // boresight at 180, combined as G_E * G_H exactly as the renderer does
+  // (mmir/sensor/element_patterns.py, evaluate_combined_gain)
+  function gainDb(pat, dir, apex) {
+    const d = new THREE.Vector3().subVectors(dir, apex).normalize();
+    const x = d.dot(M.ax), y = d.dot(M.bo), z = d.dot(M.el);
+    const cut = (tab, ang) => {
+      const a = (ang * 180 / Math.PI + 180) * (tab.length - 1) / 360;
+      const i = Math.max(0, Math.min(tab.length - 2, Math.floor(a))), t = a - i;
+      return tab[i] * (1 - t) + tab[i + 1] * t;
+    };
+    return cut(pat.E_dB, Math.atan2(z, y)) + cut(pat.H_dB, Math.atan2(x, y));
+  }
 
-  function buildPoints(pos, nrm, N) {
+  function buildPoints(pos, nrm, N0) {
     dispose(G.pts); dispose(G.pth);
     const C = STAGE[theme()];
+    const jr = mulberry(7);
+    const N = N0 * DUP;
 
     // the bistatic mean range sets the bin, so it also sets the reveal order
     const order = [];
-    for (let i = 0; i < N; i++) {
-      const p = toThree(pos[3 * i], pos[3 * i + 1], pos[3 * i + 2]);
-      const n = toThree(nrm[3 * i] / 127.5 - 1, nrm[3 * i + 1] / 127.5 - 1,
-                        nrm[3 * i + 2] / 127.5 - 1).normalize();
-      const rt = p.distanceTo(M.tx), rr = p.distanceTo(M.rx);
-      // Kirchhoff backscatter: a facet returns to the radar in proportion to how
-      // squarely it faces it, and the two-way spreading loss falls off with range
-      const look = new THREE.Vector3().subVectors(M.tx, p).normalize();
-      const ct = Math.max(0, n.dot(look));
-      order.push({ p, rb: (rt + rr) / 2, a: Math.pow(ct, 4) / Math.max(1, rt * rt) });
+    let gmax = -1e9;
+    for (let i0 = 0; i0 < N0; i0++) {
+      const p0 = toThree(pos[3 * i0], pos[3 * i0 + 1], pos[3 * i0 + 2]);
+      const n = toThree(nrm[3 * i0] / 127.5 - 1, nrm[3 * i0 + 1] / 127.5 - 1,
+                        nrm[3 * i0 + 2] / 127.5 - 1).normalize();
+      const t1 = new THREE.Vector3().crossVectors(n, Math.abs(n.y) < 0.9 ? M.up : M.ax).normalize();
+      const t2 = new THREE.Vector3().crossVectors(n, t1);
+      for (let c = 0; c < DUP; c++) {
+        const p = p0.clone();
+        if (c) {                       // a copy, displaced within the surface
+          const r = 0.07 * Math.sqrt(jr()), th = 2 * Math.PI * jr();
+          p.addScaledVector(t1, r * Math.cos(th)).addScaledVector(t2, r * Math.sin(th));
+        }
+        const rt = p.distanceTo(M.tx), rr = p.distanceTo(M.rx);
+        // Kirchhoff backscatter: a facet returns to the radar in proportion to how
+        // squarely it faces it, and the two-way spreading loss falls off with range
+        const look = new THREE.Vector3().subVectors(M.tx, p).normalize();
+        const ct = Math.max(0, n.dot(look));
+        // and the two-way antenna gain at the point's direction, Tx and Rx
+        const g = ANT ? gainDb(ANT.tx, p, M.tx) + gainDb(ANT.rx, p, M.rx) : 0;
+        gmax = Math.max(gmax, g);
+        const nf = n.clone().multiplyScalar(n.dot(look) < 0 ? -1 : 1);   // facing the radar
+        order.push({ p, nf, rb: (rt + rr) / 2, g,
+                     a: Math.pow(10, g / 10) * Math.pow(ct, 4) / Math.max(1, rt * rt) });
+      }
     }
     order.sort((a, b) => a.rb - b.rb);
     // normalise amplitude on the 98th percentile, so a few hot facets do not
@@ -526,15 +561,15 @@ function boot() {
     // Range zero is the radar: M.o is the ARRAY CENTRE, exactly midway between
     // the Tx and Rx spheres. The shells are spheres about it, the contours on
     // the mesh measure from it, the points snap radially about it and the
-    // histogram's axis starts on it. (Measured: see tools/measure_origin.)
+    // histogram's axis starts on it.
     const PH = M.span * 0.20;
     const base = (r) => M.o.clone().addScaledVector(M.bo, r);
     PT.base = base;
     const eH = M.halfEl * 1.6;
     MARK.uO.value.copy(M.o); MARK.uTx.value.copy(M.tx); MARK.uRx.value.copy(M.rx);
     MARK.uBo.value.copy(M.bo); MARK.uAx.value.copy(M.ax); MARK.uEl.value.copy(M.el);
-    MARK.uDr.value = RRES; MARK.uHalfAz.value = M.halfAz; MARK.uHalfEl.value = eH;
-    MARK.uBold.value = BOLD; srgb(MARK.uMarkCol.value, markHex());
+    MARK.uDr.value = RB; MARK.uHalfAz.value = M.halfAz; MARK.uHalfEl.value = eH;
+    srgb(MARK.uMarkCol.value, markHex());
 
     // ── three position sets the cloud morphs through ────────────────────
     const a0 = new Float32Array(N * 3), a1 = new Float32Array(N * 3), a2 = new Float32Array(N * 3);
@@ -544,34 +579,37 @@ function boot() {
     order.forEach((o, i) => {
       o.p.toArray(a0, 3 * i);
       amp[i] = o.a;
-      // snapped radially onto ITS OWN bin's shell -- every one of the 256
-      const k = Math.max(0, Math.min(NBIN - 1, Math.round(o.rb / RRES)));
+      // snapped radially onto ITS OWN ring, and lifted 3 cm off the surface
+      // so the sprite is not half buried in the mesh it sits on
+      const k = Math.max(0, Math.min(NB - 1, Math.round(o.rb / RB)));
       binOf[i] = k; rbOf[i] = o.rb;
       d.subVectors(o.p, M.o).normalize();
-      M.o.clone().addScaledVector(d, k * RRES).toArray(a1, 3 * i);
+      M.o.clone().addScaledVector(d, k * RB).addScaledVector(o.nf, 0.03).toArray(a1, 3 * i);
+      // brightness: the two-way antenna gain, relative to the best-lit point;
+      // -24 dB and below is the floor
+      bright[i] = s2l(Math.max(0.3, 1 + (o.g - gmax) / 30));
     });
     // ...and then onto the axis, where they STACK inside their own bin: the
     // collapse over azimuth and elevation IS the sum, so the pile height is it.
     // Each point takes a slice of the column in proportion to its amplitude.
-    const tot = new Float32Array(NBIN), run = new Float32Array(NBIN);   // bar heights
+    const tot = new Float32Array(NB), run = new Float32Array(NB);   // bar heights
     for (let i = 0; i < N; i++) tot[binOf[i]] += amp[i];
     let mxt = 0;
-    for (let k = 0; k < NBIN; k++) mxt = Math.max(mxt, tot[k]);
+    for (let k = 0; k < NB; k++) mxt = Math.max(mxt, tot[k]);
     mxt = mxt || 1;
     for (let i = 0; i < N; i++) {
       const k = binOf[i];
       const h = PH * (run[k] + amp[i] * 0.5) / mxt;       // its slice of the bar
       run[k] += amp[i];
       // 54% of a bin wide, so the columns stand apart and you can count them
-      const jx = (((i * 2654435761) % 1013) / 1013 - 0.5) * RRES * 0.54;
-      const jz = (((i * 40503) % 1009) / 1009 - 0.5) * RRES * 0.54;
-      base(k * RRES + jz).addScaledVector(M.up, h).addScaledVector(M.ax, jx)
+      const jx = (((i * 2654435761) % 1013) / 1013 - 0.5) * RB * 0.54;
+      const jz = (((i * 40503) % 1009) / 1009 - 0.5) * RB * 0.54;
+      base(k * RB + jz).addScaledVector(M.up, h).addScaledVector(M.ax, jx)
         .toArray(a2, 3 * i);
-      bright[i] = s2l(0.7 + 0.3 * Math.pow(amp[i], 0.3));    // dim, but never dark
     }
     PT.a0 = a0; PT.a1 = a1; PT.a2 = a2; PT.bright = bright; PT.rb = rbOf; PT.bin = binOf;
-    PT.n = N; PT.mk = null;
-    PT.pink = new THREE.Color(C.pts); PT.alt = new THREE.Color(altHex());
+    PT.n = N; PT.mk = null; PT.lit = null;
+    PT.pink = new THREE.Color(C.pts);
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(a0.slice(), 3));
     g.attributes.position.setUsage(THREE.DynamicDrawUsage);
@@ -579,16 +617,12 @@ function boot() {
     for (let i = 0; i < N; i++) PT.pink.toArray(c0, 3 * i);
     g.setAttribute('color', new THREE.BufferAttribute(c0, 3));
     g.attributes.color.setUsage(THREE.DynamicDrawUsage);
-    // the colour lives in the vertex colours: pink, and the odd bins tinted
-    // once a point has snapped, so the 5.9 cm discretisation shows as stripes
     PT.points = new THREE.Points(g, new THREE.PointsMaterial({
       color: 0xffffff, size: 0.075, map: sprite, alphaTest: 0.5, vertexColors: true }));
     G.pts.add(PT.points);
 
-    // ── the shells: ALL 256 of them, as the rim of each field-of-view cap
-    //    (a filled cap per bin would stack to fog; a rim is a line, and 256
-    //    lines a thumb's width apart can still be seen as 256), with every
-    //    16th shaded so the eye has something it can count ────────────────
+    // ── the shells: ALL of them, as the rim of each field-of-view cap, faint;
+    //    and ONE bright shell that runs out through them ──────────────────
     const NAZ = 30, NEL = 16;
     const unit = (az, el) => new THREE.Vector3().addScaledVector(M.bo, Math.cos(az) * Math.cos(el))
       .addScaledVector(M.ax, Math.sin(az) * Math.cos(el)).addScaledVector(M.el, Math.sin(el));
@@ -597,85 +631,67 @@ function boot() {
     for (let j2 = NEL; j2 > 0; j2--) loop.push(unit(M.halfAz, -eH + 2 * eH * j2 / NEL));
     for (let i2 = NAZ; i2 > 0; i2--) loop.push(unit(-M.halfAz + 2 * M.halfAz * i2 / NAZ, -eH));
     for (let j2 = 0; j2 < NEL; j2++) loop.push(unit(-M.halfAz, -eH + 2 * eH * j2 / NEL));
+    PT.loop = loop;
     // the far shells foreshorten to under a pixel apart and would stack to
-    // fog, so every shell's opacity tapers with its bin index: all 256 are
-    // drawn, the near ones plainly, the far ones faintly
-    const taper = (k, p = 2.4) => Math.pow(1 - 0.88 * k / NBIN, p);
-    const rimOf = (ks, p) => {
-      const v = new Float32Array(ks.length * loop.length * 6), f = new Float32Array(ks.length * loop.length * 2);
-      let n = 0;
-      for (const k of ks) {
-        for (let t = 0; t < loop.length; t++) {
-          const a = M.o.clone().addScaledVector(loop[t], k * RRES);
-          const b = M.o.clone().addScaledVector(loop[(t + 1) % loop.length], k * RRES);
-          a.toArray(v, n); b.toArray(v, n + 3); f[n / 3] = f[n / 3 + 1] = taper(k, p); n += 6;
-        }
+    // fog, so a rim's opacity eases off with its bin index
+    const taper = (k) => 1 - 0.7 * k / NB;
+    const rv = new Float32Array(NB * loop.length * 6), rf = new Float32Array(NB * loop.length * 2);
+    let n = 0;
+    for (let k = 1; k <= NB; k++) {
+      for (let t = 0; t < loop.length; t++) {
+        M.o.clone().addScaledVector(loop[t], k * RB).toArray(rv, n);
+        M.o.clone().addScaledVector(loop[(t + 1) % loop.length], k * RB).toArray(rv, n + 3);
+        rf[n / 3] = rf[n / 3 + 1] = taper(k); n += 6;
       }
-      return new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(v, 3))
-        .setAttribute('fade', new THREE.BufferAttribute(f, 1));
-    };
-    const lineMat = () => new THREE.ShaderMaterial({
+    }
+    PT.rimMat = new THREE.ShaderMaterial({
       uniforms: { col: { value: srgb(new THREE.Color(), shellHex()) }, op: { value: 0 } },
       vertexShader: 'attribute float fade; varying float vF;\n'
         + 'void main() { vF = fade; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
       fragmentShader: 'uniform vec3 col; uniform float op; varying float vF;\n'
         + 'void main() { gl_FragColor = vec4(col, op * vF); }',
       transparent: true, depthWrite: false });
-    PT.rimVerts = loop.length * 2;
-    const allK = [], boldK = [];
-    for (let k = 1; k <= NBIN; k++) { allK.push(k); if (k % BOLD === 0) boldK.push(k); }
-    PT.rimMat = lineMat();
-    PT.rims = new THREE.LineSegments(rimOf(allK), PT.rimMat);
+    PT.rims = new THREE.LineSegments(new THREE.BufferGeometry()
+      .setAttribute('position', new THREE.BufferAttribute(rv, 3))
+      .setAttribute('fade', new THREE.BufferAttribute(rf, 1)), PT.rimMat);
     PT.rims.renderOrder = 2; PT.rims.visible = false;
-    PT.boldMat = lineMat();
-    PT.boldRims = new THREE.LineSegments(rimOf(boldK, 1.0), PT.boldMat);
-    PT.boldRims.renderOrder = 3; PT.boldRims.visible = false;
-    // the shaded caps: translucent, denser towards the rim so the overlap of
-    // sixteen of them along a view ray does not whiten to fog
-    const capV = [], capE = [], capF = [], capI = [];
-    for (const k of boldK) {
-      const o = capV.length / 3;
-      for (let j2 = 0; j2 <= NEL; j2++) {
-        for (let i2 = 0; i2 <= NAZ; i2++) {
-          const az = -M.halfAz + 2 * M.halfAz * i2 / NAZ, el = -eH + 2 * eH * j2 / NEL;
-          const p = M.o.clone().addScaledVector(unit(az, el), k * RRES);
-          capV.push(p.x, p.y, p.z);
-          capE.push(Math.max(Math.abs(2 * i2 / NAZ - 1), Math.abs(2 * j2 / NEL - 1)));
-          capF.push(taper(k, 1.4));
-        }
-      }
-      for (let j2 = 0; j2 < NEL; j2++) {
-        for (let i2 = 0; i2 < NAZ; i2++) {
-          const a = o + j2 * (NAZ + 1) + i2, b = a + 1, c = a + NAZ + 1, e = c + 1;
-          capI.push(a, c, b, b, c, e);
-        }
+    // the bright shell: a filled cap and its rim, repositioned every frame
+    const capU = new Float32Array((NAZ + 1) * (NEL + 1) * 3), idx = [];
+    for (let j2 = 0, n2 = 0; j2 <= NEL; j2++) {
+      for (let i2 = 0; i2 <= NAZ; i2++, n2++) {
+        unit(-M.halfAz + 2 * M.halfAz * i2 / NAZ, -eH + 2 * eH * j2 / NEL).toArray(capU, 3 * n2);
       }
     }
-    PT.capIdx = NAZ * NEL * 6;
+    for (let j2 = 0; j2 < NEL; j2++) {
+      for (let i2 = 0; i2 < NAZ; i2++) {
+        const a = j2 * (NAZ + 1) + i2, b = a + 1, c = a + NAZ + 1, e = c + 1;
+        idx.push(a, c, b, b, c, e);
+      }
+    }
     const cg = new THREE.BufferGeometry();
-    cg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(capV), 3));
-    cg.setAttribute('edge', new THREE.BufferAttribute(new Float32Array(capE), 1));
-    cg.setAttribute('fade', new THREE.BufferAttribute(new Float32Array(capF), 1));
-    cg.setIndex(capI);
-    PT.capMat = new THREE.ShaderMaterial({
-      uniforms: { col: { value: srgb(new THREE.Color(), shellHex()) }, op: { value: 0 } },
-      vertexShader: 'attribute float edge, fade; varying float vE, vF;\n'
-        + 'void main() { vE = edge; vF = fade; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: 'uniform vec3 col; uniform float op; varying float vE, vF;\n'
-        + 'void main() { gl_FragColor = vec4(col, op * vF * (0.10 + 0.90 * pow(vE, 2.5))); }',
-      transparent: true, depthWrite: false, side: THREE.DoubleSide });
-    PT.caps = new THREE.Mesh(cg, PT.capMat);
-    PT.caps.renderOrder = 2; PT.caps.visible = false;
-    G.pth.add(PT.rims, PT.boldRims, PT.caps);
+    cg.setAttribute('position', new THREE.BufferAttribute(capU.slice(), 3));
+    cg.attributes.position.setUsage(THREE.DynamicDrawUsage);
+    cg.setIndex(idx);
+    PT.capMat = new THREE.MeshBasicMaterial({ color: shellHex(), transparent: true, opacity: 0,
+                                              side: THREE.DoubleSide, depthWrite: false });
+    PT.cap = new THREE.Mesh(cg, PT.capMat);
+    PT.cap.renderOrder = 3; PT.cap.visible = false; PT.capU = capU; PT.capKey = -1;
+    const hv = new Float32Array(loop.length * 6);
+    const hg = new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(hv, 3));
+    hg.attributes.position.setUsage(THREE.DynamicDrawUsage);
+    PT.hiMat = new THREE.LineBasicMaterial({ color: shellHex(), transparent: true, opacity: 0 });
+    PT.hi = new THREE.LineSegments(hg, PT.hiMat);
+    PT.hi.renderOrder = 4; PT.hi.visible = false;
+    G.pth.add(PT.rims, PT.cap, PT.hi);
 
-    // ── the histogram proper: one bar per bin. A point sprite is 7.5 cm
-    //    across and a bin is 5.9 cm, so a pile of sprites cannot show the
-    //    discretisation however it is jittered -- the bars can.
-    const HW = RRES * 0.27;                              // half a bar: 54% duty
+    // ── the histogram proper: one bar per ring. A point sprite is 7.5 cm
+    //    across, so a pile of sprites cannot show the discretisation however
+    //    it is jittered -- the bars can.
+    const HW = RB * 0.27;                                // half a bar: 54% duty
     const bFull = [], bFlat = [], bIdx = [];
-    for (let k = 0; k < NBIN; k++) {
+    for (let k = 0; k < NB; k++) {
       if (tot[k] <= 0) continue;
-      const b0 = base(k * RRES), h = PH * tot[k] / mxt;
+      const b0 = base(k * RB), h = PH * tot[k] / mxt;
       const l = b0.clone().addScaledVector(M.ax, -HW), r = b0.clone().addScaledVector(M.ax, HW);
       const lt = l.clone().addScaledVector(M.up, h), rt = r.clone().addScaledVector(M.up, h);
       const n = bFull.length / 3;
@@ -689,9 +705,9 @@ function boot() {
     // thinner than a pixel, so a rib down each bar's leading edge keeps the
     // discretisation visible at any angle or zoom.
     const rib = [], ribFlat = [];
-    for (let k = 0; k < NBIN; k++) {
+    for (let k = 0; k < NB; k++) {
       if (tot[k] <= 0) continue;
-      const e = base(k * RRES).addScaledVector(M.ax, -HW), h = PH * tot[k] / mxt;
+      const e = base(k * RB).addScaledVector(M.ax, -HW), h = PH * tot[k] / mxt;
       rib.push(e.x, e.y, e.z, e.x, e.y + h, e.z);
       ribFlat.push(e.x, e.y, e.z, e.x, e.y, e.z);
     }
@@ -717,7 +733,7 @@ function boot() {
     G.pth.add(PT.bars);
 
     // ── the axis: from range ZERO on the array centre, ticked every 20 of
-    //    the 256 real bins, and a dot on the origin itself ────────────────
+    //    the 256 real bins, with a tall tick and a dot on the origin itself ─
     const ap = [base(0), base(RTOP), base(0).addScaledVector(M.up, -M.span * 0.03), base(0).addScaledVector(M.up, M.span * 0.03)];
     for (let k = 0; k <= NBIN; k += 20) {
       ap.push(base(k * RRES), base(k * RRES).addScaledVector(M.up, -M.span * 0.013));
@@ -731,7 +747,8 @@ function boot() {
     PT.origin.position.copy(base(0)); PT.origin.renderOrder = 7;
     G.pth.add(PT.origin);
 
-    // ── and the profile itself: every point Hann-splatted over 15 bins ───
+    // ── and the profile itself: every point Hann-splatted over 15 of the
+    //    REAL bins, on the real 256-bin grid ──────────────────────────────
     const pb = new Float32Array(NBIN), half = (HANN - 1) / 2;
     for (let i = 0; i < N; i++) {
       const kf = order[i].rb / RRES;
@@ -755,21 +772,6 @@ function boot() {
     PT.prof = new THREE.Line(new THREE.BufferGeometry().setFromPoints(prof), PT.profMat);
     PT.prof.renderOrder = 6; PT.profN = NBIN;
     G.pth.add(PT.prof);
-    pointLabels();
-  }
-  // the act's captions, rebuilt on a theme flip: what the shells are, and the
-  // two ends of the range axis
-  function pointLabels() {
-    const C = STAGE[theme()];
-    ['lab', 'l0', 'l1'].forEach((k) => { if (PT[k]) { G.pth.remove(PT[k]); PT[k].material.map.dispose(); PT[k].material.dispose(); } });
-    const eH = M.halfEl * 1.6, ink = C.ink;
-    PT.lab = textSprite(`all ${NBIN} range shells, Δr = ${(RRES * 100).toFixed(2)} cm — every ${BOLD}th shaded`, ink, 64, 600);
-    const hexA = '#' + new THREE.Color(axisHex()).getHexString();
-    PT.l0 = textSprite('0', hexA, 64, 600); sizeSprite(PT.l0, 0.3);
-    PT.l0.position.copy(PT.base(0)).addScaledVector(M.up, -M.span * 0.045);
-    PT.l1 = textSprite(`${RTOP.toFixed(2)} m (bin ${NBIN})`, hexA, 64, 600); sizeSprite(PT.l1, 0.3);
-    PT.l1.position.copy(PT.base(RTOP)).addScaledVector(M.up, -M.span * 0.045);
-    [PT.lab, PT.l0, PT.l1].forEach((s) => { s.material.opacity = 0; s.visible = false; G.pth.add(s); });
   }
 
   // ════════════════════════════════════════════════════════════════════
@@ -836,67 +838,74 @@ function boot() {
     G.pth.visible = pt.frac > 0 && rig > 0.002;
     MARK.uMark.value = 0;
     if (G.pth.visible && PT.a0) {
-      // ── beat 2: the shells build outward one bin at a time, all 256 of
-      //    them; then they go, and the trace each left on the scene (the mesh
-      //    shader's contours) stays ─────────────────────────────────────────
-      const nsh = Math.round(NBIN * pt.shells);
-      const shA = Math.min(1, pt.shells * 8) * (1 - pt.shellOut) * rig;
-      const shellOn = nsh > 0 && shA > 0.002;
-      [PT.rims, PT.boldRims, PT.caps, PT.lab].forEach((o) => { o.visible = shellOn; });
-      if (shellOn) {
-        const nb = Math.floor(nsh / BOLD);
-        PT.rims.geometry.setDrawRange(0, nsh * PT.rimVerts);
-        PT.rimMat.uniforms.op.value = 0.16 * shA;
-        PT.boldRims.geometry.setDrawRange(0, nb * PT.rimVerts);
-        PT.boldMat.uniforms.op.value = 1.0 * shA;
-        PT.caps.geometry.setDrawRange(0, nb * PT.capIdx);
-        PT.capMat.uniforms.op.value = 0.26 * shA;
-        PT.lab.material.opacity = shA;
-        // the caption sits at a fixed spot of the frame, bottom right, on the
-        // empty floor: unprojected from screen each frame, sized for its depth
-        const D = 8, hv = 2 * D * Math.tan(camera.fov * 0.5 * D2R);
-        _v.set(0.36, -0.5, 0.5).unproject(camera).sub(camera.position).normalize();
-        PT.lab.position.copy(camera.position).addScaledVector(_v, D);
-        sizeSprite(PT.lab, 0.04 * hv);
+      // ── beat 2: every shell appears, faint; then one bright shell runs out
+      //    through them, laying its trace on the scene as it passes; then the
+      //    faint shells go and the trace stays ─────────────────────────────
+      const shA = pt.shells * (1 - pt.shellOut) * rig;
+      PT.rims.visible = shA > 0.002;
+      if (PT.rims.visible) PT.rimMat.uniforms.op.value = 0.14 * shA;
+      const kf = pt.sweep * NB;                          // the bright shell's bin
+      const hiA = Math.min(1, pt.sweep * 25) * Math.min(1, (1 - pt.sweep) * 25) * rig;
+      PT.cap.visible = PT.hi.visible = hiA > 0.002;
+      if (PT.cap.visible) {
+        PT.capMat.opacity = 0.42 * hiA; PT.hiMat.opacity = 0.95 * hiA;
+        const rC = Math.max(RB, kf * RB);
+        if (rC !== PT.capKey) {
+          PT.capKey = rC;
+          const g = PT.cap.geometry.attributes.position, v = g.array, u = PT.capU;
+          const o = [M.o.x, M.o.y, M.o.z];
+          for (let i = 0; i < v.length; i += 3) for (let c = 0; c < 3; c++) v[i + c] = o[c] + u[i + c] * rC;
+          g.needsUpdate = true;
+          const h = PT.hi.geometry.attributes.position, hv = h.array, L = PT.loop;
+          for (let t = 0; t < L.length; t++) {
+            const a = L[t], b = L[(t + 1) % L.length];
+            hv[6 * t] = o[0] + a.x * rC; hv[6 * t + 1] = o[1] + a.y * rC; hv[6 * t + 2] = o[2] + a.z * rC;
+            hv[6 * t + 3] = o[0] + b.x * rC; hv[6 * t + 4] = o[1] + b.y * rC; hv[6 * t + 5] = o[2] + b.z * rC;
+          }
+          h.needsUpdate = true;
+        }
       }
-      MARK.uMark.value = Math.min(1, pt.shells * 8) * rig;
-      MARK.uKmax.value = nsh;
+      MARK.uMark.value = Math.min(1, pt.sweep * 25) * rig;
+      MARK.uKmax.value = kf;
 
-      // ── beat 3: the points discretise onto their own bin, outward, and the
-      //    odd bins take the second tint so the bins can be told apart ──────
+      // ── beat 3: the points snap onto their own ring, outward ─────────────
       // ── beat 4: and only then does azimuth and elevation collapse, the
-      //    points stacking into their bin's column ──────────────────────────
-      const snFront = RTOP * 1.06 * pt.snap, SOFT = RRES * 8;
-      const mk = pt.snap * 1e6 + pt.collapse * 1e3 + pt.amp;
+      //    points stacking into their ring's column ─────────────────────────
+      const snFront = RTOP * 1.06 * pt.snap, SOFT = RB * 4;
+      const mk = pt.snap * 1e3 + pt.collapse;
       if (mk !== PT.mk) {
         PT.mk = mk;
         const a = PT.points.geometry.attributes.position, v = a.array, co = pt.collapse;
-        const cc = PT.points.geometry.attributes.color, cv = cc.array, pk = PT.pink, al = PT.alt;
         for (let i = 0, n = PT.n; i < n; i++) {
           const w = Math.max(0, Math.min(1, (snFront - PT.rb[i]) / SOFT));
           for (let c = 3 * i; c < 3 * i + 3; c++) {
             const q = PT.a0[c] + (PT.a1[c] - PT.a0[c]) * w;
             v[c] = q + (PT.a2[c] - q) * co;
           }
-          // a point flashes as the front crystallises it onto its line
-          const tw = (PT.bin[i] & 1) ? w : 0;
-          const b = (1 + (PT.bright[i] - 1) * pt.amp) * (1 + 1.6 * Math.sin(Math.PI * w));
-          cv[3 * i] = (pk.r + (al.r - pk.r) * tw) * b;
-          cv[3 * i + 1] = (pk.g + (al.g - pk.g) * tw) * b;
-          cv[3 * i + 2] = (pk.b + (al.b - pk.b) * tw) * b;
         }
-        a.needsUpdate = true; cc.needsUpdate = true;
+        a.needsUpdate = true;
         PT.points.material.depthTest = co < 0.02;
-        // a 7.5 cm sprite would smear right across a 5.9 cm bin
-        PT.points.material.size = 0.075 * (1 - 0.68 * co);
+        // a 7.5 cm sprite would smear right across a bin: a snapped point is a
+        // fifth smaller so the rings keep a gap between them, and a column
+        // point a good deal smaller again
+        PT.points.material.size = 0.075 * (1 - 0.2 * Math.min(1, pt.snap * 1.5)) * (1 - 0.6 * co);
         PT.points.material.opacity = 1 - 0.65 * co;
         PT.points.material.transparent = true;
+      }
+      // each point lit by the two-way antenna gain at its direction
+      if (pt.amp !== PT.lit) {
+        PT.lit = pt.amp;
+        const cc = PT.points.geometry.attributes.color, cv = cc.array, pk = PT.pink;
+        for (let i = 0, n = PT.n; i < n; i++) {
+          const b = 1 + (PT.bright[i] - 1) * pt.amp;
+          cv[3 * i] = pk.r * b; cv[3 * i + 1] = pk.g * b; cv[3 * i + 2] = pk.b * b;
+        }
+        cc.needsUpdate = true;
       }
 
       const axA = 0.85 * Math.min(1, pt.collapse * 4) * rig;
       PT.axisMat.opacity = axA; PT.origin.material.opacity = axA;
-      PT.origin.visible = PT.l0.visible = PT.l1.visible = axA > 0.002;
-      PT.l0.material.opacity = axA; PT.l1.material.opacity = axA;
+      PT.origin.visible = axA > 0.002;
       PT.bars.visible = pt.collapse > 0.02 && rig > 0.002;
       PT.ribs.visible = PT.bars.visible;
       if (PT.bars.visible) {
@@ -1187,17 +1196,22 @@ function boot() {
         // 1 the points
         await tween(1700, id, (t) => { S.pts.frac = t; }, ease.out);
         await hold(900, id);
-        // 2 all 256 range shells, built outward from the radar one bin at a time...
-        await tween(1800, id, (t) => { S.pts.shells = t; }, ease.lin);
-        await hold(1400, id);
-        //   ...then the shells go, and only their trace on the scene stays
-        await tween(900, id, (t) => { S.pts.shellOut = t; }, ease.io);
+        // 2 every range shell appears, faint...
+        await tween(900, id, (t) => { S.pts.shells = t; }, ease.out);
+        await hold(800, id);
+        //   ...one bright shell runs out through them, leaving its trace on the scene...
+        await tween(2200, id, (t) => { S.pts.sweep = t; }, ease.lin);
+        await hold(500, id);
+        //   ...then the shells go, and only the trace stays
+        await tween(800, id, (t) => { S.pts.shellOut = t; }, ease.io);
         await hold(1000, id);
-        // 3 the points discretise in range, onto that trace
+        // 3 the points snap onto their own ring, outward
         await tween(1600, id, (t) => { S.pts.snap = t; }, ease.io);
-        await tween(600, id, (t) => { S.pts.amp = t; }, ease.out);
-        await hold(1000, id);
-        // 4 azimuth and elevation collapse: the histogram, then the profile
+        await hold(1300, id);
+        // 4 each point lit by the two-way antenna gain at its direction, then
+        //   azimuth and elevation collapse: the histogram, then the profile
+        await tween(700, id, (t) => { S.pts.amp = t; }, ease.out);
+        await hold(500, id);
         await tween(1600, id, (t) => { S.pts.collapse = t; }, ease.io);
         await tween(800, id, (t) => { S.pts.prof = t; }, ease.out);
         await hold(1200, id);
@@ -1275,17 +1289,16 @@ function boot() {
     mesh.material.color.setHex(C.mesh);
     buildRadar();
     RT.lines.material.color.setHex(C.ray); RT.hits.material.color.setHex(C.ray); RT.wave.material.color.setHex(C.wave);
-    PT.pink = new THREE.Color(C.pts); PT.alt = new THREE.Color(altHex()); PT.mk = null;
+    PT.pink = new THREE.Color(C.pts); PT.lit = null;
     if (PT.profMat) PT.profMat.color.setHex(profHex());
     if (PT.axisMat) PT.axisMat.color.setHex(axisHex());
     if (PT.origin) PT.origin.material.color.setHex(axisHex());
     if (PT.rimMat) srgb(PT.rimMat.uniforms.col.value, shellHex());
-    if (PT.boldMat) srgb(PT.boldMat.uniforms.col.value, shellHex());
-    if (PT.capMat) srgb(PT.capMat.uniforms.col.value, shellHex());
+    if (PT.capMat) PT.capMat.color.setHex(shellHex());
+    if (PT.hiMat) PT.hiMat.color.setHex(shellHex());
     srgb(MARK.uMarkCol.value, markHex());
     if (PT.barMat) PT.barMat.color.setHex(C.pts);
     if (PT.ribMat) PT.ribMat.color.setHex(ribHex());
-    if (PT.base) pointLabels();
     const lab = GS.fanLab; G.fan.remove(lab); lab.material.map.dispose(); lab.material.dispose();
     const nl = textSprite('range-azimuth map', C.ink, 64, 700); sizeSprite(nl, 0.62);
     nl.position.copy(lab.position); nl.material.opacity = lab.material.opacity; GS.fanLab = nl; G.fan.add(nl);
@@ -1342,8 +1355,9 @@ function boot() {
     fetch(`./static/viewer/${SCENE}.json`).then((r) => r.json()),
     fetch(`./static/viewer/${SCENE}.bin`).then((r) => r.arrayBuffer()),
     fetch('./static/data/pareto.json').then((r) => r.json()),
-  ]).then(([meta, buf, pd]) => {
-    pdata = pd;
+    fetch('./static/data/antenna_mmwcas.json').then((r) => r.json()),
+  ]).then(([meta, buf, pd, ant]) => {
+    pdata = pd; ANT = ant;
     buildScene(meta, buf);
     renderer.setClearColor(STAGE[theme()].bg, 1);
     buildPlot();
