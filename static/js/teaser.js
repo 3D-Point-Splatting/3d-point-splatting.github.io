@@ -1183,14 +1183,14 @@ function boot() {
       async play(id) {
         await head('Prior Methods: Mesh + MC Ray-Tracing', RED, id);
         await camTo(VIEWS.shot, 250, id);      // a no-op unless the user skipped in
-        await tween(1300, id, (t) => { S.rt.r = t * M.rmax * 0.78; }, ease.lin);
-        await tween(700, id, (t) => { S.rt.paths = t; }, ease.lin);
+        await tween(2900, id, (t) => { S.rt.r = t * M.rmax * 0.78; }, ease.lin);
+        await tween(1500, id, (t) => { S.rt.paths = t; }, ease.lin);
         pCard.classList.add('on');
-        await hold(150, id);
+        await hold(350, id);
         await addMarks(['Sionna-RT', 'mmIR'], id);
-        await hold(200, id);
+        await hold(400, id);
         await dockFly('mc', id);
-        await tween(250, id, (t) => { S.rt.r = M.rmax * 0.78 * (1 - t); S.rt.paths = 1 - t; });
+        await tween(500, id, (t) => { S.rt.r = M.rmax * 0.78 * (1 - t); S.rt.paths = 1 - t; });
       },
       finish() { P.show['Sionna-RT'] = P.show.mmIR = 1; pCard.classList.add('on'); dockInstant('mc'); S.rt = { r: 0, paths: 0 }; S.cam = VIEWS.shot; },
     },
@@ -1198,19 +1198,19 @@ function boot() {
       async play(id) {
         await head('Prior Methods: NeRF/3DGS Primitives', RED, id);
         await camTo(VIEWS.shot, 250, id);      // a no-op unless the user skipped in
-        await tween(800, id, (t) => { S.gs.grow = t * 1.6; }, ease.lin);
-        await hold(200, id);
-        await camTo(VIEWS.bev, 1000, id);
-        await tween(900, id, (t) => { S.gs.drop = t; S.gs.fan = Math.max(0, (t - 0.35) / 0.65); }, ease.lin);
-        await tween(500, id, (t) => { S.gs.fade = 0.55 * t; });
+        await tween(1900, id, (t) => { S.gs.grow = t * 1.6; }, ease.lin);
+        await hold(400, id);
+        await camTo(VIEWS.bev, 2200, id);
+        await tween(2200, id, (t) => { S.gs.drop = t; S.gs.fan = Math.max(0, (t - 0.35) / 0.65); }, ease.lin);
+        await tween(900, id, (t) => { S.gs.fade = 0.55 * t; });
         await addMarks(['DART', 'Radar Fields', 'RadarSplat'], id);
-        await hold(100, id);
-        await tween(500, id, (t) => { S.gs.fan = 1 - t; S.gs.drop = 1 - t;
+        await hold(400, id);
+        await tween(800, id, (t) => { S.gs.fan = 1 - t; S.gs.drop = 1 - t;
                                       S.gs.fade = 0.55 * (1 - t); }, ease.lin);
-        await camTo(VIEWS.shot, 700, id);
-        await hold(150, id);
+        await camTo(VIEWS.shot, 1200, id);
+        await hold(250, id);
         await dockFly('inr', id);
-        await tween(300, id, (t) => { S.gs.fade = t; });
+        await tween(500, id, (t) => { S.gs.fade = t; });
         S.gs = { grow: 0, drop: 0, fan: 0, fade: 0 };
       },
       finish() { ['DART', 'Radar Fields', 'RadarSplat'].forEach((n) => { P.show[n] = 1; }); dockInstant('inr');
