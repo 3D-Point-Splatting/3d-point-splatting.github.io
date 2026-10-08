@@ -272,8 +272,16 @@
     #teaser-anim.no-webgl .t-still img { width: 100%; height: auto; display: block; }
     @media (max-width: 760px) {
       #teaser-anim .t-stage { aspect-ratio: 16 / 9; }
-      #teaser-anim { --t-card-w: 42%; --t-card-h: 58%; --t-dock-h: 30%; }
-      #teaser-anim .t-props { display: none; }
+      /* the shots fill their grid column rather than being sized from the
+         row height, which makes them ~39% wider; the row grows to 42% to
+         fit them at 4:3 and the card gives up the height to stay clear */
+      #teaser-anim { --t-card-w: 42%; --t-card-h: 50%; --t-dock-h: 42%; }
+      #teaser-anim .t-slot .t-shot { width: 100%; height: auto; }
+      /* the three properties are the point of the comparison, so they stay */
+      #teaser-anim .t-props { left: 4%; bottom: 4%; padding: .1em .32em;
+                              font-size: clamp(.36rem, 1.55vw, .55rem); line-height: 1.24; }
+      #teaser-anim .t-stitle { left: 4%; top: 4%; padding: .04em .36em;
+                               font-size: clamp(.34rem, 1.45vw, .52rem); }
       #teaser-anim .t-head { font-size: clamp(.6rem, 2.1vw, .9rem); }
     }
 
