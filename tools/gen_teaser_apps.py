@@ -27,7 +27,6 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.patches import FancyBboxPatch
 
 THEME = sys.argv[1]
 assert THEME in ("light", "dark")
@@ -77,10 +76,6 @@ def project(p):
 def panel(name, colours):
     fig = plt.figure(figsize=(W, H), dpi=DPI)
     fig.patch.set_facecolor("none")
-    fig.patches.append(FancyBboxPatch(
-        (0, 0), 1, 1, boxstyle=f"round,pad=0,rounding_size={R / W}",
-        transform=fig.transFigure, facecolor=TILE, edgecolor="none",
-        zorder=0, mutation_aspect=W / H))
     ax = fig.add_axes([0.03, 0.035, 0.94, 0.93], zorder=2)
     ax.set_facecolor("none"); ax.axis("off")
     for p, c, s in ((mv, np.tile(MESH, (len(mv), 1)), 0.035),
@@ -131,9 +126,6 @@ PRIOR_C = "#b3271e" if THEME == "light" else "#e0584c"
 def rendering():
     fig = plt.figure(figsize=(W, H), dpi=DPI)
     fig.patch.set_facecolor("none")
-    fig.patches.append(FancyBboxPatch(
-        (0, 0), 1, 1, boxstyle=f"round,pad=0,rounding_size={R / W}",
-        transform=fig.transFigure, facecolor=TILE, edgecolor="none", zorder=0))
 
     # The label column is sized from the MEASURED width of "Methods" --
     # guessing it cost two rounds of clipping. Everything left over, minus

@@ -204,11 +204,12 @@
        always in front; the scene is framed in the space between them. */
     #teaser-anim { --t-red: #c0392b; --t-green: #1e8a3c; --t-card: rgba(245, 245, 247, 0.72);
                    --t-card-line: rgba(31, 32, 36, 0.10); --t-props: rgba(255, 255, 255, 0.86);
+                   --t-panel: #ffffff;
                    --t-pad: 1.1%; --t-card-w: 31%; --t-card-h: 61%;
                    --t-dock-h: 32%; --t-shot-ar: 4 / 3; --t-dock-gap: 0.9%; }
-    :root[data-theme="dark"] #teaser-anim { --t-red: #f0705f; --t-green: #6fd08a;
+    :root[data-theme="dark"] #teaser-anim { --t-panel: #26272c; --t-red: #f0705f; --t-green: #6fd08a;
       --t-card: rgba(26, 26, 30, 0.70); --t-card-line: rgba(232, 232, 236, 0.12); --t-props: rgba(22, 23, 27, 0.84); }
-    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) #teaser-anim { --t-red: #f0705f;
+    @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) #teaser-anim { --t-panel: #26272c; --t-red: #f0705f;
       --t-green: #6fd08a; --t-card: rgba(26, 26, 30, 0.70); --t-card-line: rgba(232, 232, 236, 0.12);
       --t-props: rgba(22, 23, 27, 0.84); } }
     #teaser-anim .t-stage { position: relative; aspect-ratio: 8 / 3; border-radius: 14px; overflow: hidden;
@@ -278,25 +279,26 @@
       opacity: 0; transform: translateY(8px);
       transition: opacity .5s ease, transform .5s ease; }
     #teaser-anim.apps .t-apps-head { opacity: 1; transform: none; }
-    #teaser-anim .t-app { margin: 0; min-height: 0; display: flex; flex-direction: column;
-      align-items: center; justify-content: flex-start;
+    #teaser-anim .t-app { margin: 0; min-height: 0; min-width: 0;
+      width: 100%; height: 100%;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: flex-start; background: var(--t-panel);
+      border-radius: 10px; padding: 1.4%;
       opacity: 0; transform: translateY(12px);
       transition: opacity .55s ease, transform .55s ease; }
-    #teaser-anim .t-app figcaption { flex: 0 0 auto; margin: 0 0 1.5%; text-align: center;
+    #teaser-anim .t-app figcaption { flex: 0 0 auto; margin: 0 0 1.2%; text-align: center;
       line-height: 1.12; color: var(--fg);
       font-family: "Times New Roman", Times, Georgia, serif; font-weight: 700;
       font-size: clamp(.56rem, 1.05vw, .92rem); }
     /* bounded by BOTH axes rather than stretched by flex: the panel keeps
        its own aspect and takes whichever limit binds */
-    /* ONE fill per tile -- the panel's own, baked into the PNG. A second
-       card behind it was the two-tone look. In dark the panel's #26272c
-       equals the stage, so the edge comes from a hairline and a shadow
-       rather than a different fill, which also keeps the four consistent
-       (app_nvs is cropped from the paper teaser and cannot be re-tinted). */
-    #teaser-anim .t-app img { min-height: 0; max-width: 100%; max-height: 100%;
-      width: auto; height: auto; object-fit: contain; border-radius: 9px;
-      border: 1px solid var(--t-card-line);
-      box-shadow: 0 2px 12px rgba(0, 0, 0, .18); }
+    /* ONE fill, and it belongs to the tile. Three of the panels now draw
+       on transparency; app_nvs is cropped from the paper teaser so it keeps
+       its own background, and --t-panel is set to exactly that colour so
+       the two are seamless. No border or shadow on the art itself. */
+    #teaser-anim .t-app img { min-height: 0; min-width: 0; max-width: 100%;
+      max-height: 100%; width: auto; height: auto; object-fit: contain;
+      border: none; box-shadow: none; }
     #teaser-anim .t-app.on { opacity: 1; transform: none; }
     #teaser-anim .t-app img { max-width: 100%; max-height: 100%; width: auto; height: auto; display: block; }
     #teaser-anim .t-still { display: none; }
@@ -436,17 +438,17 @@
         <div class="t-apps" id="t-apps">
         <p class="t-apps-head">Applications</p>
         <figure class="t-app"><figcaption>Product-Agnostic Rendering</figcaption><img class="themed"
-          data-light="./static/teaser/light/app_rendering.png?v=3" data-dark="./static/teaser/dark/app_rendering.png?v=3"
-          src="./static/teaser/light/app_rendering.png?v=3" alt="Product-agnostic rendering: ADC, CRP and RA from one fitted scene."></figure>
+          data-light="./static/teaser/light/app_rendering.png?v=4" data-dark="./static/teaser/dark/app_rendering.png?v=4"
+          src="./static/teaser/light/app_rendering.png?v=4" alt="Product-agnostic rendering: ADC, CRP and RA from one fitted scene."></figure>
         <figure class="t-app"><figcaption>Material Reconstruction</figcaption><img class="themed"
-          data-light="./static/teaser/light/app_material.png?v=3" data-dark="./static/teaser/dark/app_material.png?v=3"
-          src="./static/teaser/light/app_material.png?v=3" alt="Material reconstruction: per-point relative permittivity."></figure>
+          data-light="./static/teaser/light/app_material.png?v=4" data-dark="./static/teaser/dark/app_material.png?v=4"
+          src="./static/teaser/light/app_material.png?v=4" alt="Material reconstruction: per-point relative permittivity."></figure>
         <figure class="t-app"><figcaption>Normal Estimation</figcaption><img class="themed"
-          data-light="./static/teaser/light/app_normals.png?v=3" data-dark="./static/teaser/dark/app_normals.png?v=3"
-          src="./static/teaser/light/app_normals.png?v=3" alt="Normal estimation: per-point surface normals."></figure>
+          data-light="./static/teaser/light/app_normals.png?v=4" data-dark="./static/teaser/dark/app_normals.png?v=4"
+          src="./static/teaser/light/app_normals.png?v=4" alt="Normal estimation: per-point surface normals."></figure>
         <figure class="t-app"><figcaption>Novel View Synthesis</figcaption><img class="themed"
-          data-light="./static/teaser/light/app_nvs.png?v=3" data-dark="./static/teaser/dark/app_nvs.png?v=3"
-          src="./static/teaser/light/app_nvs.png?v=3" alt="Novel view synthesis on held-out frames."></figure>
+          data-light="./static/teaser/light/app_nvs.png?v=4" data-dark="./static/teaser/dark/app_nvs.png?v=4"
+          src="./static/teaser/light/app_nvs.png?v=4" alt="Novel view synthesis on held-out frames."></figure>
         </div>
       </div>
       <div class="t-still"><img class="themed"
@@ -816,7 +818,7 @@
 </script>
 
 <script type="module" src="./static/js/viewer.js?v=10"></script>
-<script type="module" src="./static/js/teaser.js?v=18"></script>
+<script type="module" src="./static/js/teaser.js?v=19"></script>
 
 </body>
 </html>
