@@ -889,6 +889,14 @@ function boot() {
     }
   }
   window.addEventListener('resize', resize);
+  // resize() ran exactly once after load, so the heading's band was measured
+  // from whatever the card's box happened to be at that instant -- and the
+  // card's height comes from a percentage, which can settle a frame later.
+  // Observing the boxes re-measures whenever they actually change.
+  if (window.ResizeObserver) {
+    const ro = new ResizeObserver(() => resize());
+    [stage, pCard, dockEl].forEach((el) => el && ro.observe(el));
+  }
   const touch = () => { lastTouch = performance.now(); };
   [pWrap, sceneWrap].forEach((el) => {
     el.addEventListener('pointerdown', touch);

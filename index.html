@@ -204,8 +204,8 @@
        always in front; the scene is framed in the space between them. */
     #teaser-anim { --t-red: #c0392b; --t-green: #1e8a3c; --t-card: rgba(245, 245, 247, 0.72);
                    --t-card-line: rgba(31, 32, 36, 0.10); --t-props: rgba(255, 255, 255, 0.86);
-                   --t-pad: 1.1%; --t-card-w: 36%; --t-card-h: 64%;
-                   --t-dock-h: 28%; --t-shot-ar: 4 / 3; }
+                   --t-pad: 1.1%; --t-card-w: 28%; --t-card-h: 52%;
+                   --t-dock-h: 40%; --t-shot-ar: 4 / 3; --t-dock-gap: 0.9%; }
     :root[data-theme="dark"] #teaser-anim { --t-red: #f0705f; --t-green: #6fd08a;
       --t-card: rgba(26, 26, 30, 0.70); --t-card-line: rgba(232, 232, 236, 0.12); --t-props: rgba(22, 23, 27, 0.84); }
     @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) #teaser-anim { --t-red: #f0705f;
@@ -236,8 +236,8 @@
     #pareto-wrap { position: absolute; inset: 0; cursor: grab; }
     #teaser-anim .t-dock { position: absolute; left: var(--t-pad); right: var(--t-pad); top: auto;
       bottom: var(--t-pad); height: var(--t-dock-h);
-      display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2%;
-      justify-items: center; pointer-events: none;
+      display: flex; justify-content: center; align-items: center;
+      gap: var(--t-dock-gap); pointer-events: none;
       transition: opacity .6s ease; z-index: 4; }
     #teaser-anim.apps .t-dock { opacity: 0; }
     #teaser-anim .t-slot { margin: 0; --c: var(--t-red); height: 100%; min-height: 0;
@@ -291,7 +291,7 @@
          tall. 32% with a 3:2 shot makes them WIDER and SHORTER than the
          4:3-at-42% they replaced (105 x 70 vs 88 x 92 on a 390px stage). */
       #teaser-anim { --t-card-w: 42%; --t-card-h: 56%;
-                     --t-dock-h: 32%; --t-shot-ar: 3 / 2; }
+                     --t-dock-h: 32%; --t-shot-ar: 3 / 2; --t-dock-gap: 1.6%; }
       /* the three properties are the comparison the tiles exist to make */
       /* Sized from a measurement, not a guess. The longest line,
          "\2713 product-agnostic, complex", renders 90.6px at 6px; the tile
@@ -798,7 +798,7 @@
 </script>
 
 <script type="module" src="./static/js/viewer.js?v=10"></script>
-<script type="module" src="./static/js/teaser.js?v=15"></script>
+<script type="module" src="./static/js/teaser.js?v=16"></script>
 
 </body>
 </html>
