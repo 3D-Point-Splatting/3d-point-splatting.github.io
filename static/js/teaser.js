@@ -204,7 +204,7 @@ function boot() {
 
   // ── state ──────────────────────────────────────────────────────────────
   const fresh = () => ({ cam: null, rt: { r: 0, paths: 0 }, gs: { grow: 0, drop: 0, fan: 0, fade: 0 },
-                         pts: { frac: 0, shells: 0, splat: 0, amp: 0, collapse: 0, prof: 0 } });
+                         pts: { frac: 0, sweep: 0, shellOut: 0, snap: 0, amp: 0, collapse: 0, prof: 0, fade: 0 } });
   let S = fresh();
   const P = { show: {}, surf: 0 };
 
@@ -472,8 +472,10 @@ function boot() {
 
     // the range axis runs from the ARRAY CENTRE, midway between Tx and Rx:
     // range zero is the radar, so the histogram starts there
-    const LIFT = -M.span * 0.055, PH = M.span * 0.20;
-    const base = (r) => M.o.clone().addScaledVector(M.bo, r).addScaledVector(M.up, LIFT);
+    // range zero is the radar itself: M.o is the array centre, exactly midway
+    // between the Tx and Rx spheres, and nothing is subtracted from it
+    const PH = M.span * 0.20;
+    const base = (r) => M.o.clone().addScaledVector(M.bo, r);
     PT.base = base;
 
     // ── three position sets the cloud morphs through ────────────────────
@@ -605,10 +607,16 @@ function boot() {
     //    the snapped cloud alone shows no banding -- the spacing is a third of
     //    a percent of the scene -- so the 256 rings are drawn, and there are
     //    256 of them, one per bin, not a handful chosen to look nice.
-    const hR = M.o.y - M.floorY, NSEG = 26;
+    // the bbox floor is below the scene's actual ground over most of the
+    // frame, which buried the rings; find the ground under the radar instead
+    const down = new THREE.Raycaster(M.o.clone().addScaledVector(M.up, M.span * 0.5),
+                                     M.up.clone().negate(), 0, M.span);
+    const gh = down.intersectObject(mesh, false)[0];
+    const gy = (gh ? gh.point.y : M.floorY) + M.span * 0.004;
+    const hR = M.o.y - gy, NSEG = 26;
     const boH = new THREE.Vector3(M.bo.x, 0, M.bo.z).normalize();
     const axH = new THREE.Vector3(M.ax.x, 0, M.ax.z).normalize();
-    const gc = new THREE.Vector3(M.o.x, M.floorY + M.span * 0.003, M.o.z);
+    const gc = new THREE.Vector3(M.o.x, gy, M.o.z);
     const rg = [], ringR = [];
     for (let k = 1; k <= NBIN; k++) {
       const rr = k * RRES, rho = Math.sqrt(Math.max(0, rr * rr - hR * hR));
@@ -723,25 +731,52 @@ function boot() {
     const pt = st.pts;
     G.pts.visible = pt.frac > 0;
     if (G.pts.visible) PT.points.geometry.setDrawRange(0, Math.floor(PT.n * pt.frac));
-    G.pth.visible = pt.frac > 0;
+    G.pth.visible = pt.frac > 0 && pt.fade < 0.999;
     if (G.pth.visible && PT.a0) {
-      // the cloud morphs: where it is -> onto its own bin's shell, as the
-      // sweeping front reaches it -> into its own column
-      const front = RTOP * 1.06 * pt.splat, SOFT = RRES * 8;
-      const key = pt.splat * 4096 + pt.collapse;
+      const rig = 1 - pt.fade;                 // everything but the points, at the end
+
+      // ── beat 2: one cap sweeps outward through the bins, leaving the
+      //    rings it has passed drawn on the floor; then the cap goes and
+      //    the rings stay ────────────────────────────────────────────────
+      const swFront = RTOP * 1.06 * pt.sweep;
+      PT.rings.visible = pt.sweep > 0.002;
+      if (PT.rings.visible) {
+        let nr = 0;
+        while (nr < PT.ringR.length && PT.ringR[nr] <= swFront) nr++;
+        PT.rings.geometry.setDrawRange(0, nr * PT.ringSeg);
+        PT.ringMat.opacity = 0.42 * Math.min(1, pt.sweep * 2.5) * rig;
+      }
+      PT.shell.visible = pt.sweep > 0.002 && pt.shellOut < 0.998;
+      if (PT.shell.visible) {
+        PT.shell.material.opacity = 0.21 * Math.min(1, pt.sweep * 2.5) * (1 - pt.shellOut);
+        const rC = Math.max(RRES, swFront);
+        if (rC !== PT.shellKey) {
+          PT.shellKey = rC;
+          const g = PT.shell.geometry.attributes.position, v = g.array, u = PT.capU;
+          const o = [M.o.x, M.o.y, M.o.z];
+          for (let i = 0; i < v.length; i += 3) {
+            for (let c = 0; c < 3; c++) v[i + c] = o[c] + u[i + c] * rC;
+          }
+          g.needsUpdate = true;
+        }
+      }
+
+      // ── beat 3: the points discretise onto their own bin, outward ─────
+      // ── beat 4: and only then does the shell collapse in azimuth and
+      //    elevation, which is the histogram ──────────────────────────────
+      const snFront = RTOP * 1.06 * pt.snap, SOFT = RRES * 8;
+      const key = pt.snap * 4096 + pt.collapse;
       if (key !== PT.morph) {
         PT.morph = key;
-        const a = PT.points.geometry.attributes.position, v = a.array;
-        const co = pt.collapse;
+        const a = PT.points.geometry.attributes.position, v = a.array, co = pt.collapse;
         for (let i = 0, n = PT.n; i < n; i++) {
-          const w = Math.max(0, Math.min(1, (front - PT.rb[i]) / SOFT));
+          const w = Math.max(0, Math.min(1, (snFront - PT.rb[i]) / SOFT));
           for (let c = 3 * i; c < 3 * i + 3; c++) {
             const q = PT.a0[c] + (PT.a1[c] - PT.a0[c]) * w;
             v[c] = q + (PT.a2[c] - q) * co;
           }
         }
         a.needsUpdate = true;
-        // piled onto a line inside the scene, the cloud would be buried
         PT.points.material.depthTest = co < 0.02;
         // a 7.5 cm sprite would smear right across a 5.9 cm bin
         PT.points.material.size = 0.075 * (1 - 0.68 * co);
@@ -756,39 +791,12 @@ function boot() {
         c.needsUpdate = true;
       }
 
-      PT.axisMat.opacity = 0.8 * Math.min(1, pt.frac * 2);
-      // the shell: parked at the first bin while it fades up, then sweeping
-      // outward, then contracting in azimuth and elevation onto its own bin
-      const rC = Math.max(RRES, front);
-      // the rings light up as the front passes them
-      PT.rings.visible = pt.shells > 0.002;
-      if (PT.rings.visible) {
-        let nr = 0;
-        while (nr < PT.ringR.length && PT.ringR[nr] <= front) nr++;
-        PT.rings.geometry.setDrawRange(0, nr * PT.ringSeg);
-        PT.ringMat.opacity = 0.42 * Math.min(1, pt.shells * 1.4) * (1 - 0.8 * pt.collapse);
-      }
-      PT.shell.visible = pt.shells > 0.002 && pt.collapse < 0.995;
-      if (PT.shell.visible) {
-        PT.shell.material.opacity = 0.14 * Math.min(1, pt.shells * 1.4) * (1 - pt.collapse);
-        const sk = rC * 4096 + pt.collapse;
-        if (sk !== PT.shellKey) {
-          PT.shellKey = sk;
-          const g = PT.shell.geometry.attributes.position, v = g.array, u = PT.capU;
-          const t = PT.base(rC), co = pt.collapse;
-          for (let i = 0; i < v.length; i += 3) {
-            for (let c = 0; c < 3; c++) {
-              const o = [M.o.x, M.o.y, M.o.z][c], tip = [t.x, t.y, t.z][c];
-              const q = o + u[i + c] * rC;
-              v[i + c] = q + (tip - q) * co;
-            }
-          }
-          g.needsUpdate = true;
-        }
-      }
-      PT.bars.visible = pt.collapse > 0.02;
+      PT.axisMat.opacity = 0.8 * Math.min(1, pt.sweep * 3) * rig;
+      PT.bars.visible = pt.collapse > 0.02 && rig > 0.002;
+      PT.ribs.visible = PT.bars.visible;
       if (PT.bars.visible) {
-        PT.barMat.opacity = 0.9 * Math.min(1, pt.collapse * 1.6);
+        PT.barMat.opacity = 0.9 * Math.min(1, pt.collapse * 1.6) * rig;
+        PT.ribMat.opacity = 0.62 * Math.min(1, pt.collapse * 1.6) * rig;
         if (PT.barKey !== pt.collapse) {
           PT.barKey = pt.collapse;
           [[PT.bars.geometry.attributes.position, PT.barFlat, PT.barFull],
@@ -800,20 +808,18 @@ function boot() {
               g.needsUpdate = true;
             });
         }
-        PT.ribs.visible = true;
-        PT.ribMat.opacity = 0.62 * Math.min(1, pt.collapse * 1.6);
-      } else { PT.ribs.visible = false; }
-      PT.prof.visible = pt.prof > 0;
+      }
+      PT.prof.visible = pt.prof > 0 && rig > 0.002;
       PT.prof.geometry.setDrawRange(0, Math.max(2, Math.floor(PT.profN * pt.prof)));
-      PT.profMat.opacity = Math.min(1, pt.prof * 2.5);
+      PT.profMat.opacity = Math.min(1, pt.prof * 2.5) * rig;
     }
   }
 
   // the final state of each chapter, for a tile re-render after a theme flip
   const FINAL = {
-    mc: () => ({ cam: VIEWS.shot, rt: { r: M.rmax * 0.78, paths: 1 }, gs: { grow: 0, drop: 0, fan: 0, fade: 0 }, pts: { frac: 0, shells: 0, splat: 0, amp: 0, collapse: 0, prof: 0 } }),
-    inr: () => ({ cam: VIEWS.shot, rt: { r: 0, paths: 0 }, gs: { grow: 1.6, drop: 0, fan: 0, fade: 0 }, pts: { frac: 0, shells: 0, splat: 0, amp: 0, collapse: 0, prof: 0 } }),
-    pts: () => ({ cam: VIEWS.shot, rt: { r: 0, paths: 0 }, gs: { grow: 0, drop: 0, fan: 0, fade: 0 }, pts: { frac: 1, shells: 0, splat: 0, amp: 1, collapse: 0, prof: 1 } }),
+    mc: () => ({ cam: VIEWS.shot, rt: { r: M.rmax * 0.78, paths: 1 }, gs: { grow: 0, drop: 0, fan: 0, fade: 0 }, pts: { frac: 0, sweep: 0, shellOut: 0, snap: 0, amp: 0, collapse: 0, prof: 0, fade: 0 } }),
+    inr: () => ({ cam: VIEWS.shot, rt: { r: 0, paths: 0 }, gs: { grow: 1.6, drop: 0, fan: 0, fade: 0 }, pts: { frac: 0, sweep: 0, shellOut: 0, snap: 0, amp: 0, collapse: 0, prof: 0, fade: 0 } }),
+    pts: () => ({ cam: VIEWS.shot, rt: { r: 0, paths: 0 }, gs: { grow: 0, drop: 0, fan: 0, fade: 0 }, pts: { frac: 1, sweep: 0, shellOut: 1, snap: 0, amp: 1, collapse: 0, prof: 0, fade: 1 } }),
   };
   function cropRect() {                              // stage px: 4:3 at full height, centred on the band
     const W = stage.clientWidth, H = stage.clientHeight, cw = Math.min(W, H * 4 / 3);
@@ -1073,22 +1079,28 @@ function boot() {
       async play(id) {
         await head('3DPS: Point Primitives', GREEN, id);
         await camTo(VIEWS.shot, 900, id);      // a no-op: act 2 panned back here
-        await tween(1800, id, (t) => { S.pts.frac = t; }, ease.out);
-        await tween(1000, id, (t) => { S.pts.shells = t; }, ease.out);
-        await tween(2400, id, (t) => { S.pts.splat = t; }, ease.io);   // the sweep
-        await tween(1100, id, (t) => { S.pts.amp = t; }, ease.out);
-        await tween(1600, id, (t) => { S.pts.collapse = t; }, ease.io);
-        await tween(1000, id, (t) => { S.pts.prof = t; }, ease.out);
-        await hold(400, id);
-        // the mechanism shown, the cloud springs back: the profile is what stays
-        await tween(900, id, (t) => { S.pts.collapse = 1 - t; S.pts.splat = 1 - t;
-                                      S.pts.shells = 1 - t; }, ease.io);
+        await tween(1700, id, (t) => { S.pts.frac = t; }, ease.out);
+        // every range shell, swept, leaving its ring on the floor behind it
+        await tween(2000, id, (t) => { S.pts.sweep = t; }, ease.io);
+        await tween(600, id, (t) => { S.pts.shellOut = t; }, ease.out);
+        // only now are the points discretised in range, onto those rings
+        await tween(1500, id, (t) => { S.pts.snap = t; }, ease.io);
+        await tween(800, id, (t) => { S.pts.amp = t; }, ease.out);
+        // and only now is azimuth and elevation collapsed away
+        await tween(1500, id, (t) => { S.pts.collapse = t; }, ease.io);
+        await tween(900, id, (t) => { S.pts.prof = t; }, ease.out);
+        await hold(450, id);
+        // the histogram goes and the cloud comes back: the act rests on the
+        // points alone, which is also what the dock tile is a shot of
+        await tween(1000, id, (t) => { S.pts.collapse = 1 - t; S.pts.snap = 1 - t;
+                                       S.pts.fade = t; }, ease.io);
         await addMarks(['3DPS'], id);
         await hold(450, id);
         await dockFly('pts', id);
       },
       finish() { P.show['3DPS'] = 1; dockInstant('pts');
-                 S.pts = { frac: 1, shells: 0, splat: 0, amp: 1, collapse: 0, prof: 1 };
+                 S.pts = { frac: 1, sweep: 0, shellOut: 1, snap: 0, amp: 1,
+                           collapse: 0, prof: 0, fade: 1 };
                  S.cam = VIEWS.shot; },
     },
     { // 4 Frontier
