@@ -192,7 +192,7 @@
        always in front; the scene is framed in the space between them. */
     #teaser-anim { --t-red: #c0392b; --t-green: #1e8a3c; --t-card: rgba(245, 245, 247, 0.72);
                    --t-card-line: rgba(31, 32, 36, 0.10); --t-props: rgba(255, 255, 255, 0.86);
-                   --t-pad: 1.1%; --t-card-w: 33%; }
+                   --t-pad: 1.1%; --t-card-w: 33%; --t-card-ar: 1.22; }
     :root[data-theme="dark"] #teaser-anim { --t-red: #f0705f; --t-green: #6fd08a;
       --t-card: rgba(26, 26, 30, 0.70); --t-card-line: rgba(232, 232, 236, 0.12); --t-props: rgba(22, 23, 27, 0.84); }
     @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) #teaser-anim { --t-red: #f0705f;
@@ -203,14 +203,17 @@
     #t-scene { position: absolute; inset: 0; transition: opacity .8s ease; }
     #t-scene canvas, #pareto-wrap canvas { width: 100% !important; height: 100% !important; display: block; }
     #teaser-anim.apps #t-scene { opacity: .16; }
-    #teaser-anim .t-head { position: absolute; top: 4.5%; left: 0; pointer-events: none; z-index: 3;
-      transform: translateX(-50%); white-space: nowrap; transition: opacity .45s ease;
+    #teaser-anim .t-head { position: absolute; top: 4.5%; left: 0; pointer-events: none; z-index: 12;
+      transform: translateX(-50%); transition: opacity .45s ease; text-align: center;
+      text-wrap: balance; line-height: 1.15;
       font-family: "Times New Roman", Times, Georgia, serif; font-weight: 700;
-      font-size: clamp(.9rem, 1.75vw, 1.35rem); color: var(--h, var(--fg));
+      font-size: clamp(.72rem, 1.6vw, 1.35rem); color: var(--h, var(--fg));
       text-shadow: 0 0 6px var(--tile-bg), 0 0 12px var(--tile-bg), 0 0 18px var(--tile-bg); }
     #teaser-anim .t-head.out { opacity: 0; }
     #teaser-anim .t-pareto { position: absolute; top: var(--t-pad); bottom: var(--t-pad); right: var(--t-pad);
-      width: var(--t-card-w); z-index: 10; border-radius: 12px; background: var(--t-card);
+      width: var(--t-card-w); aspect-ratio: var(--t-card-ar); height: auto;
+      margin-block: auto; max-height: calc(100% - 2 * var(--t-pad));
+      z-index: 10; border-radius: 12px; background: var(--t-card);
       border: 1px solid var(--t-card-line); -webkit-backdrop-filter: blur(9px) saturate(1.05);
       backdrop-filter: blur(9px) saturate(1.05); box-shadow: 0 8px 26px rgba(0, 0, 0, .12); opacity: 0;
       transform: translateY(-8px) scale(.98); transition: opacity .6s ease, transform .6s ease, box-shadow .6s ease;
@@ -267,9 +270,25 @@
     #teaser-anim.no-webgl .t-still { display: block; }
     #teaser-anim.no-webgl .t-still img { width: 100%; height: auto; display: block; }
     @media (max-width: 760px) {
-      #teaser-anim .t-stage { aspect-ratio: 16 / 9; }
-      #teaser-anim { --t-card-w: 40%; }
+      #teaser-anim { --t-card-w: calc(100% - 2 * var(--t-pad)); --t-pad: 2%; }
+      #teaser-anim .t-stage { aspect-ratio: 3 / 4; }
       #teaser-anim .t-props { display: none; }
+      /* title across the top, in its own band */
+      #teaser-anim .t-head { top: 1.5%; left: 50% !important; width: 92%;
+                             font-size: clamp(.7rem, 3.4vw, 1rem); }
+      /* the plot takes the middle, full width */
+      #teaser-anim .t-pareto { top: 12%; bottom: auto; left: var(--t-pad);
+                               right: var(--t-pad); width: auto;
+                               aspect-ratio: 1.15; margin-block: 0; max-height: 52%; }
+      /* the three shots become a row along the bottom */
+      #teaser-anim .t-dock { left: var(--t-pad); right: var(--t-pad); top: auto;
+                             bottom: var(--t-pad); height: 26%;
+                             grid-template-rows: none;
+                             grid-template-columns: repeat(3, minmax(0, 1fr));
+                             gap: 2%; }
+      #teaser-anim .t-slot .t-shot { aspect-ratio: auto; width: 100%; }
+      #teaser-anim .t-apps { right: var(--t-pad); top: 12%;
+                             grid-template-rows: auto repeat(2, minmax(0, 1fr)); }
     }
 
     /* theme toggle */
@@ -368,7 +387,7 @@
         </div>
         <div class="t-dock" id="t-dock">
           <figure class="t-slot" data-fam="mc">
-            <div class="t-shot"><div class="t-stitle">Mesh + MC ray tracing</div><img alt="Mesh + Monte-Carlo ray tracing on the scene.">
+            <div class="t-shot"><div class="t-stitle">Mesh + MC Ray Tracing</div><img alt="Mesh + Monte-Carlo ray tracing on the scene.">
               <div class="t-props"><span class="ok">physics-based</span><span class="ok">product-agnostic, complex</span><span class="no">slow (~160 min)</span></div></div>
           </figure>
           <figure class="t-slot" data-fam="inr">
@@ -401,7 +420,7 @@
         src="./static/images/teaser_light.png?v=1" alt="3DPS teaser (static fallback)."></div>
     </div>
     <p class="caption has-text-centered">
-      Point primitives are the best choice for radar novel view synthesis. MC ray-tracing renderers are physically
+      Point primitives are pareto optimal for radar novel view synthesis. MC ray-tracing renderers are physically
       faithful but too slow for multi-viewpoint optimization. Optical-NVS adaptations of NeRF and gaussian splatting
       are fast but not physically faithful and render power-only BEV RA images. 3DPS is the first to satisfy all
       three, and enables applications such as product-agnostic rendering (ADC / CRP / |RA|), material and normals
@@ -763,7 +782,7 @@
 </script>
 
 <script type="module" src="./static/js/viewer.js?v=8"></script>
-<script type="module" src="./static/js/teaser.js?v=11"></script>
+<script type="module" src="./static/js/teaser.js?v=12"></script>
 
 </body>
 </html>

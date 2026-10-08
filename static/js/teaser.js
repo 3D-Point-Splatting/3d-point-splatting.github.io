@@ -735,7 +735,7 @@ function boot() {
     },
     { // 1 Ray tracing
       async play(id) {
-        await head('Prior Methods: Mesh + MC ray-tracing', RED, id);
+        await head('Prior Methods: Mesh + MC Ray-Tracing', RED, id);
         await camTo(VIEWS.rt, 1500, id);
         await tween(2900, id, (t) => { S.rt.r = t * M.rmax * 0.78; }, ease.lin);
         await tween(1500, id, (t) => { S.rt.paths = t; }, ease.lin);
@@ -750,7 +750,7 @@ function boot() {
     },
     { // 2 Splatting
       async play(id) {
-        await head('Prior Methods: NeRF/3DGS primitives', RED, id);
+        await head('Prior Methods: NeRF/3DGS Primitives', RED, id);
         await camTo(VIEWS.gs, 1300, id);
         await tween(1900, id, (t) => { S.gs.grow = t * 1.6; }, ease.lin);
         await hold(400, id);
@@ -854,15 +854,28 @@ function boot() {
   let midX = 0.5;                                    // centre of the free band, as a stage fraction
   function resize() {
     const w = sceneWrap.clientWidth, h = sceneWrap.clientHeight;
+    const stacked = window.matchMedia('(max-width: 760px)').matches;
     if (w && h) {
       renderer.setSize(w, h, false); camera.aspect = w / h;
-      const st = stage.getBoundingClientRect(), cd = pCard.getBoundingClientRect();
-      const left = Math.max(st.left, ...[...dockEl.querySelectorAll('.t-shot')].map((e) => e.getBoundingClientRect().right)) - st.left;
-      midX = ((left + (cd.left - st.left)) / 2) / st.width;
-      // shift the projection so the scene's centre sits in the middle of the free band
-      camera.setViewOffset(w, h, -(midX - 0.5) * w, 0, w, h);
+      if (stacked) {
+        // the dock and the card sit ABOVE and BELOW the scene, not beside
+        // it, so there is no free band to bias the projection into
+        midX = 0.5;
+        camera.clearViewOffset();
+        headEl.style.maxWidth = '';
+      } else {
+        const st = stage.getBoundingClientRect(), cd = pCard.getBoundingClientRect();
+        const left = Math.max(st.left, ...[...dockEl.querySelectorAll('.t-shot')].map((e) => e.getBoundingClientRect().right)) - st.left;
+        const band = (cd.left - st.left) - left;
+        midX = ((left + (cd.left - st.left)) / 2) / st.width;
+        // shift the projection so the scene's centre sits in the middle of the free band
+        camera.setViewOffset(w, h, -(midX - 0.5) * w, 0, w, h);
+        headEl.style.left = (midX * 100) + '%';
+        // and keep the title INSIDE that band: it used to be nowrap, so a
+        // long one ran underneath the dock and the card
+        headEl.style.maxWidth = Math.max(80, band - 12) + 'px';
+      }
       camera.updateProjectionMatrix();
-      headEl.style.left = (midX * 100) + '%';
     }
     const pw = pWrap.clientWidth, ph = pWrap.clientHeight;
     if (pw && ph) {
