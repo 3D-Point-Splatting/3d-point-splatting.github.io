@@ -159,12 +159,12 @@
        with height:auto the two maps could total more than the overlay and
        spill past the viewer, which is what broke it on a phone */
     #ra-overlay figure { margin: 0; background: var(--ra-card); border-radius: 6px;
-                         padding: 0.22rem 0.22rem 0.1rem; backdrop-filter: blur(2px);
+                         padding: 0.18rem 0.22rem 0.22rem; backdrop-filter: blur(2px);
                          flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
     #ra-overlay img { width: 100%; flex: 1 1 auto; min-height: 0; height: auto;
                       object-fit: contain; display: block; border-radius: 4px; }
     #ra-overlay figcaption { text-align: center; font-size: 0.66rem; color: var(--fg);
-                             margin-top: 0.12rem; line-height: 1.1; }
+                             margin: 0 0 0.14rem; line-height: 1.1; flex: 0 0 auto; }
     #ra-slider { pointer-events: none; position: absolute; left: 50%; transform: translateX(-50%);
                  bottom: 0.5rem; width: min(42%, 320px); opacity: 1;
                  transition: opacity 0.3s ease; }
@@ -577,8 +577,8 @@
     <div id="viewer-wrap">
       <div id="viewer-loading">loading&hellip;</div>
       <div id="ra-overlay" hidden>
-        <figure><img id="ra-gt" alt="Measured range-azimuth map"><figcaption>Measured</figcaption></figure>
-        <figure><img id="ra-rd" alt="3DPS rendered range-azimuth map"><figcaption>3DPS</figcaption></figure>
+        <figure><figcaption>Measured</figcaption><img id="ra-gt" alt="Measured range-azimuth map"></figure>
+        <figure><figcaption>3DPS</figcaption><img id="ra-rd" alt="3DPS rendered range-azimuth map"></figure>
       </div>
       <div id="ra-slider" hidden>
         <div id="ra-label"></div>
@@ -797,7 +797,7 @@
   })();
 </script>
 
-<script type="module" src="./static/js/viewer.js?v=9"></script>
+<script type="module" src="./static/js/viewer.js?v=10"></script>
 <script type="module" src="./static/js/teaser.js?v=15"></script>
 
 </body>

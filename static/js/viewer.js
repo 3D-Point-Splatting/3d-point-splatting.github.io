@@ -17,6 +17,7 @@ const raBar = document.getElementById('ra-slider');
 const raTicks = document.getElementById('ra-ticks');
 const raRange = document.getElementById('ra-range');
 const raLabel = document.getElementById('ra-label');
+const RA_V = 2;                     // bump when crop_ra_thumbs.py re-cuts
 const raGt = document.getElementById('ra-gt');
 const raRd = document.getElementById('ra-rd');
 if (wrap) init();
@@ -327,8 +328,10 @@ function start() {
       raLabel.textContent =
         `frame #${k + 1} [${p.test ? 'held out' : 'train'}]${corr}`;
     }
-    if (raGt && p.gt) raGt.src = `./static/viewer/${p.gt}`;
-    if (raRd && p.rd) raRd.src = `./static/viewer/${p.rd}`;
+    // these were the only assets on the page with no cache key, so a
+    // re-cut thumbnail kept serving from cache under the same filename
+    if (raGt && p.gt) raGt.src = `./static/viewer/${p.gt}?v=${RA_V}`;
+    if (raRd && p.rd) raRd.src = `./static/viewer/${p.rd}?v=${RA_V}`;
   }
 
   // during an orbit/zoom the maps fade out so the scene reads through them,
