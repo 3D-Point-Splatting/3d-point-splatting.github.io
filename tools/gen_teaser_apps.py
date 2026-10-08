@@ -45,8 +45,11 @@ else:
 W, H, DPI = (7.1 - 4 * 0.06 - 2 * 0.12) / 3.0, 1.51111, 600
 R = 0.08 * 0.55                                   # the column tile's radius
 
-plt.rcParams.update({"font.family": "serif", "font.serif": ["DejaVu Serif"],
-                     "mathtext.fontset": "dejavuserif"})
+# sans, to match the page's own face: the HTML chrome around these panels
+# is sans, so serif text inside them read as a different document
+plt.rcParams.update({"font.family": "sans-serif",
+                     "font.sans-serif": ["DejaVu Sans"],
+                     "mathtext.fontset": "dejavusans"})
 
 meta = json.load(open(os.path.join(VIEWER, f"{SCENE}.json")))
 raw = open(os.path.join(VIEWER, f"{SCENE}.bin"), "rb").read()

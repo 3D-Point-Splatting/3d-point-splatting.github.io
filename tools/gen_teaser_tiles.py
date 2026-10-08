@@ -11,9 +11,9 @@ layout arithmetic (FIG_WIDTH_INCHES 7.1, margin .06, row pad .06, row gap
 CHECKED against the render: each method tile must actually have its red or
 green border on the pixels the box lands on, or the tool fails.
 
-Of the applications row only novel view synthesis is cropped. Product-
-agnostic rendering, material reconstruction and normal estimation are all
-built by gen_teaser_apps.py instead.
+Only the three method tiles are cropped. Every applications panel is
+generated instead -- gen_teaser_apps.py and gen_teaser_nvs.py -- so they
+can share the page's font and draw on transparency.
 
 Usage: gen_teaser_tiles.py light|dark [out_dir]
 """
@@ -78,13 +78,9 @@ for i, key in enumerate(("mc", "inr", "pts")):
 # Only NVS is cropped now. Product-agnostic rendering is REBUILT by
 # gen_teaser_apps.py (two rows instead of three, bigger cells), so cropping
 # it here would overwrite that.
-# Crop BELOW the column's own header: _draw_nvs_column puts its title at
-# the column top (head_y = top - 0.06, body_top = head_y - 0.16, and the
-# column is inset 0.04 inside the crop), so 0.22 in off the top drops it.
-# The animated teaser sets these titles in HTML instead.
-NVS_HEAD = 0.22
-for i, name in ((2, "app_nvs.png"),):
-    rows.append(crop(XS[i], BODY_BOT, TW, COL_TOP - BODY_BOT - NVS_HEAD, name))
+# Nothing from the applications row is cropped any more: all four panels
+# are generated (gen_teaser_apps.py, gen_teaser_nvs.py) so they share the
+# page's sans face and draw on transparency. Cropping could do neither.
 
 for x0, y0, x1, y1, name in rows:
     print(f"  {name:<20s} {x1 - x0:4d} x {y1 - y0:4d} px   "
