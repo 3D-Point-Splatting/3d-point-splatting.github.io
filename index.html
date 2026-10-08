@@ -322,6 +322,17 @@
       #teaser-anim .t-stitle { top: 4%; padding: .04em .36em;
                                font-size: clamp(.34rem, 1.45vw, .52rem); }
       #teaser-anim .t-head { font-size: clamp(.6rem, 2.1vw, .9rem); }
+      /* Act 2 on a phone: the 2x2 was sharing a 390px stage with the plot
+         card, so each tile was ~93px and the six-cell rendering diagram
+         was illegible. The grid takes the FULL width here and the stage
+         squares up for the height; the plot had its own act and steps
+         aside rather than halving the applications. */
+      #teaser-anim.apps .t-stage { aspect-ratio: 1 / 1; }
+      #teaser-anim.apps .t-pareto { opacity: 0; pointer-events: none; }
+      #teaser-anim .t-apps { right: var(--t-pad); }
+      #teaser-anim .t-app { padding: 0.3rem 0.32rem 0.34rem; }
+      #teaser-anim .t-app figcaption { margin: 0 0 0.22rem;
+                                       font-size: clamp(.5rem, 2.3vw, .8rem); }
     }
 
     /* theme toggle */
@@ -435,17 +446,17 @@
         <div class="t-apps" id="t-apps">
         <p class="t-apps-head">Applications</p>
         <figure class="t-app"><figcaption>Product-Agnostic Rendering</figcaption><img class="themed"
-          data-light="./static/teaser/light/app_rendering.png?v=4" data-dark="./static/teaser/dark/app_rendering.png?v=4"
-          src="./static/teaser/light/app_rendering.png?v=4" alt="Product-agnostic rendering: ADC, CRP and RA from one fitted scene."></figure>
+          data-light="./static/teaser/light/app_rendering.png?v=5" data-dark="./static/teaser/dark/app_rendering.png?v=5"
+          src="./static/teaser/light/app_rendering.png?v=5" alt="Product-agnostic rendering: ADC, CRP and RA from one fitted scene."></figure>
         <figure class="t-app"><figcaption>Material Reconstruction</figcaption><img class="themed"
-          data-light="./static/teaser/light/app_material.png?v=4" data-dark="./static/teaser/dark/app_material.png?v=4"
-          src="./static/teaser/light/app_material.png?v=4" alt="Material reconstruction: per-point relative permittivity."></figure>
+          data-light="./static/teaser/light/app_material.png?v=5" data-dark="./static/teaser/dark/app_material.png?v=5"
+          src="./static/teaser/light/app_material.png?v=5" alt="Material reconstruction: per-point relative permittivity."></figure>
         <figure class="t-app"><figcaption>Normal Estimation</figcaption><img class="themed"
-          data-light="./static/teaser/light/app_normals.png?v=4" data-dark="./static/teaser/dark/app_normals.png?v=4"
-          src="./static/teaser/light/app_normals.png?v=4" alt="Normal estimation: per-point surface normals."></figure>
+          data-light="./static/teaser/light/app_normals.png?v=5" data-dark="./static/teaser/dark/app_normals.png?v=5"
+          src="./static/teaser/light/app_normals.png?v=5" alt="Normal estimation: per-point surface normals."></figure>
         <figure class="t-app"><figcaption>Novel View Synthesis</figcaption><img class="themed"
-          data-light="./static/teaser/light/app_nvs.png?v=4" data-dark="./static/teaser/dark/app_nvs.png?v=4"
-          src="./static/teaser/light/app_nvs.png?v=4" alt="Novel view synthesis on held-out frames."></figure>
+          data-light="./static/teaser/light/app_nvs.png?v=5" data-dark="./static/teaser/dark/app_nvs.png?v=5"
+          src="./static/teaser/light/app_nvs.png?v=5" alt="Novel view synthesis on held-out frames."></figure>
         </div>
       </div>
       <div class="t-still"><img class="themed"
@@ -815,7 +826,7 @@
 </script>
 
 <script type="module" src="./static/js/viewer.js?v=10"></script>
-<script type="module" src="./static/js/teaser.js?v=20"></script>
+<script type="module" src="./static/js/teaser.js?v=21"></script>
 
 </body>
 </html>

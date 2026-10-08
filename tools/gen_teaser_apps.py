@@ -127,23 +127,24 @@ def rendering():
     fig = plt.figure(figsize=(W, H), dpi=DPI)
     fig.patch.set_facecolor("none")
 
-    # The label column is sized from the MEASURED width of "Methods" --
-    # guessing it cost two rounds of clipping. Everything left over, minus
-    # the two arrow gaps, goes to the three cells.
-    MG, AW, GAP, ROW_PT = 0.06, 0.165, 0.065, 5.0
-    probe = plt.figure(figsize=(2, 1), dpi=DPI)
-    pt = probe.text(0.1, 0.5, "Methods", fontsize=ROW_PT, fontweight="bold")
-    probe.canvas.draw()
-    LAB_W = pt.get_window_extent(probe.canvas.get_renderer()).width / DPI
-    plt.close(probe)
-    LW = LAB_W + 0.055 + MG
-    cw = (W - 2 * MG - LW - 2 * AW) / 3.0
-    ch = cw                                   # the sources are square
-    hdr_y = H - 0.085
-    top = hdr_y - 0.075
-    y1 = top - ch                             # row 1 (3DPS)
-    y0 = y1 - GAP - ch                        # row 2 (prior methods)
-    xs = [MG + LW + k * (cw + AW) for k in range(3)]
+    # Two things were wasting the panel. The row labels ran HORIZONTALLY,
+    # so "Prior Methods" claimed 0.45in of a 2.21in panel; rotated upright
+    # they cost their text height instead. And after the title moved to
+    # HTML the block still hung from the top, leaving ~0.42in dead at the
+    # bottom. The grid is now sized by whichever axis binds and centred in
+    # both, with the margins cut to the minimum that keeps the arrows clear.
+    MG, AW, GAP, ROW_PT, HDR = 0.025, 0.115, 0.035, 5.6, 0.095
+    LW = 0.10                                  # upright label: its height
+    c = min((W - 2 * MG - LW - 2 * AW) / 3.0,
+            (H - 2 * MG - HDR - GAP) / 2.0)    # square cells
+    gw, gh = LW + 3 * c + 2 * AW, HDR + 2 * c + GAP
+    x0 = (W - gw) / 2 + LW                     # first cell's left edge
+    top = (H + gh) / 2
+    hdr_y = top - HDR / 2
+    y1 = top - HDR - c                         # row 1 (3DPS)
+    y0 = y1 - GAP - c                          # row 2 (prior methods)
+    xs = [x0 + k * (c + AW) for k in range(3)]
+    cw = ch = c
 
     def ax_at(x, y, img=None):
         a = fig.add_axes([x / W, y / H, cw / W, ch / H], zorder=2)
@@ -152,55 +153,54 @@ def rendering():
             sp.set_visible(True); sp.set_color(RULE); sp.set_linewidth(0.6)
         a.set_xticks([]); a.set_yticks([])
         if img is not None:
-            a.imshow(plt.imread(os.path.join(PANELS, img)))
-            a.set_xlim(0, plt.imread(os.path.join(PANELS, img)).shape[1])
-            a.set_ylim(plt.imread(os.path.join(PANELS, img)).shape[0], 0)
+            im = plt.imread(os.path.join(PANELS, img))
+            a.imshow(im)
+            a.set_xlim(0, im.shape[1]); a.set_ylim(im.shape[0], 0)
         return a
 
     for k, t in enumerate(("ADC", "CRP", "RA")):
         fig.text((xs[k] + cw / 2) / W, hdr_y / H, t, ha="center", va="center",
-                 fontsize=5.6, color=SUB, zorder=3)
+                 fontsize=5.8, color=SUB, zorder=3)
     ax_at(xs[0], y1, "panel_adc_ours_train.png")
     ax_at(xs[1], y1, "panel_crp_ours.png")
     ax_at(xs[2], y1, "panel_ra_ours_train.png")
     ax_at(xs[2], y0, "panel_ra_radarsplat_train.png")
-    for k in (0, 1):                          # prior methods reach neither
+    for k in (0, 1):                           # prior methods reach neither
         a = ax_at(xs[k], y0)
         a.set_xlim(0, 1); a.set_ylim(0, 1)
-        # DejaVu Serif has no U+2715; U+00D7 is in the font and matches
-        # the cross the paper teaser uses
-        a.text(0.5, 0.5, "\u00d7", ha="center", va="center", fontsize=11,
+        # DejaVu Serif has no U+2715; U+00D7 is in the font
+        a.text(0.5, 0.5, "\u00d7", ha="center", va="center", fontsize=13,
                color=PRIOR_C, transform=a.transAxes)
-    lx = MG + LW - 0.05
-    fig.text(lx / W, (y1 + ch / 2) / H, "3DPS", ha="right", va="center",
-             fontsize=ROW_PT, fontweight="bold", color=OURS_C, zorder=3)
-    t = fig.text(lx / W, (y0 + ch / 2) / H, "Prior\nMethods", ha="right",
-                 va="center", fontsize=ROW_PT, fontweight="bold",
-                 color=PRIOR_C, zorder=3, linespacing=1.1)
-    fig.canvas.draw()
-    bb = t.get_window_extent(fig.canvas.get_renderer())
-    assert bb.x0 / DPI > MG * 0.5, (
-        f"row label clips: starts at {bb.x0 / DPI:.3f} in, margin {MG}")
+    lx = x0 - 0.045
+    for y, txt_, col in ((y1, "3DPS", OURS_C), (y0, "Prior Methods", PRIOR_C)):
+        t = fig.text(lx / W, (y + ch / 2) / H, txt_, ha="center", va="center",
+                     rotation=90, rotation_mode="anchor", fontsize=ROW_PT,
+                     fontweight="bold", color=col, zorder=3)
+        fig.canvas.draw()
+        bb = t.get_window_extent(fig.canvas.get_renderer())
+        assert bb.x0 / DPI > MG * 0.4, (
+            f"{txt_} clips: starts at {bb.x0 / DPI:.3f} in, margin {MG}")
+        assert bb.height / DPI < ch + 0.02, (
+            f"{txt_} is taller than its row: {bb.height / DPI:.3f} vs {ch:.3f}")
 
-    def arrow(x0, x1, y, lab, rev):
+    def arrow(ax0, ax1, y, lab, rev):
         fig.patches.append(plt.matplotlib.patches.FancyArrowPatch(
-            ((x1 if rev else x0) / W, y / H), ((x0 if rev else x1) / W, y / H),
-            transform=fig.transFigure, arrowstyle="-|>", mutation_scale=4.0,
+            ((ax1 if rev else ax0) / W, y / H), ((ax0 if rev else ax1) / W, y / H),
+            transform=fig.transFigure, arrowstyle="-|>", mutation_scale=4.2,
             lw=0.7, color=SUB, shrinkA=0, shrinkB=0, zorder=3))
-        fig.text((x0 + x1) / 2 / W, (y + 0.075) / H, lab, ha="center",
+        fig.text((ax0 + ax1) / 2 / W, (y + 0.062) / H, lab, ha="center",
                  va="center", fontsize=5.4, color=SUB, zorder=3)
     for y in (y1, y0):
-        arrow(xs[0] + cw + 0.022, xs[1] - 0.022, y + ch / 2,
+        arrow(xs[0] + cw + 0.016, xs[1] - 0.016, y + ch / 2,
               r"$\mathcal{F}_r^{-1}$", True)
-        arrow(xs[1] + cw + 0.022, xs[2] - 0.022, y + ch / 2,
+        arrow(xs[1] + cw + 0.016, xs[2] - 0.016, y + ch / 2,
               r"$\mathcal{F}_\theta$", False)
     out = os.path.join(OUT, "app_rendering.png")
     fig.savefig(out, dpi=DPI, facecolor="none", edgecolor="none")
     plt.close(fig)
     from PIL import Image
     print(f"  app_rendering.png    {Image.open(out).size[0]} x "
-          f"{Image.open(out).size[1]} px   cells {cw:.3f} in "
-          f"(was ~0.33)")
+          f"{Image.open(out).size[1]} px   cells {cw:.3f} in")
 
 
 rendering()
