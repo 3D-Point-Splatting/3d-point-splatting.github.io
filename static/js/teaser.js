@@ -204,7 +204,7 @@ function boot() {
 
   // ── state ──────────────────────────────────────────────────────────────
   const fresh = () => ({ cam: null, rt: { r: 0, paths: 0 }, gs: { grow: 0, drop: 0, fan: 0, fade: 0 },
-                         pts: { frac: 0, path: 0 } });
+                         pts: { frac: 0, arcs: 0, splat: 0, prof: 0 } });
   let S = fresh();
   const P = { show: {}, surf: 0 };
 
@@ -427,32 +427,99 @@ function boot() {
   }
 
   // 3DPS: the fitted points, ordered by range so they sweep out from the radar
+  // 3DPS does not trace a path: every point writes its phasor into range
+  // bins at k = (R_TX + R_RX) / 2dr, spread over a 15-tap Hann window, and
+  // the bins sum to the complex range profile. So the animation's subject
+  // is the RANGE AXIS, not a ray -- the old Tx->point->Rx rods illustrated
+  // the previous act's algorithm, not this one.
+  const NB = 168, HANN = 15;            // bins across [0, rmax]; PSF taps
+  const axisHex = () => (theme() === 'dark' ? 0x9aa0ad : 0x6b6c76);
   function buildPoints(pos, N) {
     dispose(G.pts); dispose(G.pth);
     const C = STAGE[theme()];
     const order = [];
     for (let i = 0; i < N; i++) {
       const p = toThree(pos[3 * i], pos[3 * i + 1], pos[3 * i + 2]);
-      order.push({ p, d: p.distanceTo(M.tx) });
+      // the BISTATIC mean range is what sets the bin, so it also sets the
+      // order: revealing by it makes the sweep march out along the axis
+      order.push({ p, rb: (p.distanceTo(M.tx) + p.distanceTo(M.rx)) / 2 });
     }
-    order.sort((a, b) => a.d - b.d);
+    order.sort((a, b) => a.rb - b.rb);
     const arr = new Float32Array(N * 3);
     order.forEach((o, i) => o.p.toArray(arr, 3 * i));
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(arr, 3));
     PT.points = new THREE.Points(g, new THREE.PointsMaterial({ color: C.pts, size: 0.075, map: sprite, alphaTest: 0.5 }));
     PT.n = N;
     G.pts.add(PT.points);
-    // one Tx -> point -> Rx path, to a point near the boresight at mid range
-    let best = order[0], bs = -1;
-    for (const o of order) {
-      const v = o.p.clone().sub(M.tx); const c = v.normalize().dot(M.bo);
-      if (o.d > 4 && o.d < 7 && c > bs) { bs = c; best = o; }
+
+    // ── the range axis, dropped below the scene so the profile has room ──
+    const DROP = M.span * 0.26, PH = M.span * 0.17;
+    const base = (r) => M.tx.clone().addScaledVector(M.bo, r).addScaledVector(M.up, -DROP);
+    const axMat = new THREE.LineBasicMaterial({ color: axisHex(), transparent: true, opacity: 0 });
+    PT.axisMat = axMat;
+    const ap = [base(0), base(M.rmax)];
+    for (let k = 0; k <= NB; k += 12) {               // ticks every 12 bins
+      const r = M.rmax * k / NB;
+      ap.push(base(r), base(r).addScaledVector(M.up, -M.span * 0.012));
     }
-    PT.path = new THREE.Group();
-    PT.path.add(rod(M.tx, best.p, 0.02, C.tx), rod(best.p, M.rx, 0.02, C.rx));
-    const dot = new THREE.Mesh(new THREE.SphereGeometry(0.09, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-    dot.position.copy(best.p); PT.path.add(dot);
-    G.pth.add(PT.path);
+    G.pth.add(new THREE.LineSegments(
+      new THREE.BufferGeometry().setFromPoints(ap), axMat));
+
+    // ── three iso-range shells, swept outward once to say why the bin is
+    //    a shell. At a 10cm Tx/Rx baseline in a ~16m scene the constant
+    //    R_TX+R_RX surface is a prolate spheroid indistinguishable from a
+    //    sphere, so these are drawn as arcs. ──────────────────────────────
+    PT.arcs = [];
+    for (let a = 0; a < 3; a++) {
+      const pts3 = [];
+      for (let t = 0; t <= 48; t++) {
+        const phi = -M.halfAz + (2 * M.halfAz) * t / 48;
+        pts3.push(new THREE.Vector3().addScaledVector(M.bo, Math.cos(phi))
+                                     .addScaledVector(M.ax, Math.sin(phi)));
+      }
+      const m = new THREE.LineBasicMaterial({ color: C.pts, transparent: true, opacity: 0 });
+      const ln = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts3), m);
+      ln.position.copy(M.tx); ln.visible = false;
+      PT.arcs.push(ln); G.pth.add(ln);
+    }
+
+    // ── splat trails: a subsample, in the same outward order ─────────────
+    const STEP = Math.max(1, Math.floor(N / 520));
+    const tp = [];
+    for (let i = 0; i < N; i += STEP) {
+      tp.push(order[i].p, base(Math.min(order[i].rb, M.rmax)));
+    }
+    PT.trailN = tp.length;
+    const tm = new THREE.LineBasicMaterial({ color: C.pts, transparent: true, opacity: 0 });
+    PT.trails = new THREE.LineSegments(
+      new THREE.BufferGeometry().setFromPoints(tp), tm);
+    PT.trailMat = tm;
+    G.pth.add(PT.trails);
+
+    // ── the profile every point contributes to: a Hann splat per point ───
+    const bins = new Float32Array(NB);
+    const half = (HANN - 1) / 2;
+    for (const o of order) {
+      const kf = o.rb / M.rmax * (NB - 1);
+      for (let d = -half; d <= half; d++) {
+        const k = Math.round(kf) + d;
+        if (k < 0 || k >= NB) continue;
+        const u = (k - kf) / (half + 0.5);
+        if (Math.abs(u) > 1) continue;
+        bins[k] += 0.5 * (1 + Math.cos(Math.PI * u));      // Hann tap
+      }
+    }
+    const mx = Math.max(...bins) || 1;
+    const prof = [];
+    for (let k = 0; k < NB; k++) {
+      prof.push(base(M.rmax * k / (NB - 1))
+        .addScaledVector(M.up, PH * Math.pow(bins[k] / mx, 0.55)));
+    }
+    const pm = new THREE.LineBasicMaterial({ color: C.pts, transparent: true, opacity: 0 });
+    PT.prof = new THREE.Line(new THREE.BufferGeometry().setFromPoints(prof), pm);
+    PT.profMat = pm;
+    PT.profN = NB;
+    G.pth.add(PT.prof);
   }
 
   // ════════════════════════════════════════════════════════════════════
@@ -514,20 +581,34 @@ function boot() {
     // points
     G.pts.visible = st.pts.frac > 0;
     if (G.pts.visible) PT.points.geometry.setDrawRange(0, Math.floor(PT.n * st.pts.frac));
-    G.pth.visible = st.pts.path > 0;
-    if (G.pth.visible) {
-      const t = st.pts.path;
-      PT.path.children[0].scale.y = Math.min(1, t * 2);
-      PT.path.children[1].visible = t > 0.5;
-      PT.path.children[1].scale.y = Math.max(0.001, t * 2 - 1);
+    G.pth.visible = st.pts.frac > 0;
+    if (G.pth.visible && PT.prof) {
+      // the axis arrives with the cloud, the shells sweep once and go, the
+      // trails march outward, and the profile draws left to right
+      PT.axisMat.opacity = 0.75 * Math.min(1, st.pts.frac * 2);
+      const a = st.pts.arcs;
+      PT.arcs.forEach((ln, k) => {
+        const u = Math.max(0, Math.min(1, a * 1.5 - k * 0.25));
+        ln.visible = u > 0 && u < 1;
+        ln.scale.setScalar(Math.max(1e-3, u * M.rmax));
+        ln.material.opacity = 0.5 * Math.sin(Math.PI * u);   // rises, then goes
+      });
+      PT.trails.visible = st.pts.splat > 0;
+      PT.trails.geometry.setDrawRange(
+        0, Math.floor(PT.trailN * st.pts.splat / 2) * 2);
+      PT.trailMat.opacity = 0.30 * Math.min(1, st.pts.splat * 3)
+                          * (1 - 0.72 * st.pts.prof);
+      PT.prof.visible = st.pts.prof > 0;
+      PT.prof.geometry.setDrawRange(0, Math.max(2, Math.floor(PT.profN * st.pts.prof)));
+      PT.profMat.opacity = Math.min(1, st.pts.prof * 2.5);
     }
   }
 
   // the final state of each chapter, for a tile re-render after a theme flip
   const FINAL = {
-    mc: () => ({ cam: VIEWS.shot, rt: { r: M.rmax * 0.78, paths: 1 }, gs: { grow: 0, drop: 0, fan: 0, fade: 0 }, pts: { frac: 0, path: 0 } }),
-    inr: () => ({ cam: VIEWS.shot, rt: { r: 0, paths: 0 }, gs: { grow: 1.6, drop: 0, fan: 0, fade: 0 }, pts: { frac: 0, path: 0 } }),
-    pts: () => ({ cam: VIEWS.shot, rt: { r: 0, paths: 0 }, gs: { grow: 0, drop: 0, fan: 0, fade: 0 }, pts: { frac: 1, path: 1 } }),
+    mc: () => ({ cam: VIEWS.shot, rt: { r: M.rmax * 0.78, paths: 1 }, gs: { grow: 0, drop: 0, fan: 0, fade: 0 }, pts: { frac: 0, arcs: 0, splat: 0, prof: 0 } }),
+    inr: () => ({ cam: VIEWS.shot, rt: { r: 0, paths: 0 }, gs: { grow: 1.6, drop: 0, fan: 0, fade: 0 }, pts: { frac: 0, arcs: 0, splat: 0, prof: 0 } }),
+    pts: () => ({ cam: VIEWS.shot, rt: { r: 0, paths: 0 }, gs: { grow: 0, drop: 0, fan: 0, fade: 0 }, pts: { frac: 1, arcs: 1, splat: 1, prof: 1 } }),
   };
   function cropRect() {                              // stage px: 4:3 at full height, centred on the band
     const W = stage.clientWidth, H = stage.clientHeight, cw = Math.min(W, H * 4 / 3);
@@ -787,13 +868,16 @@ function boot() {
       async play(id) {
         await head('3DPS: Point Primitives', GREEN, id);
         await camTo(VIEWS.shot, 900, id);      // a no-op: act 2 panned back here
-        await tween(2600, id, (t) => { S.pts.frac = t; }, ease.out);
-        await tween(1100, id, (t) => { S.pts.path = t; }, ease.lin);
+        await tween(2200, id, (t) => { S.pts.frac = t; }, ease.out);
+        await tween(900, id, (t) => { S.pts.arcs = t; }, ease.lin);
+        await tween(1500, id, (t) => { S.pts.splat = t; }, ease.lin);
+        await tween(1200, id, (t) => { S.pts.prof = t; }, ease.out);
         await addMarks(['3DPS'], id);
         await hold(450, id);
         await dockFly('pts', id);
       },
-      finish() { P.show['3DPS'] = 1; dockInstant('pts'); S.pts = { frac: 1, path: 1 }; S.cam = VIEWS.shot; },
+      finish() { P.show['3DPS'] = 1; dockInstant('pts');
+                 S.pts = { frac: 1, arcs: 1, splat: 1, prof: 1 }; S.cam = VIEWS.shot; },
     },
     { // 4 Frontier
       async play(id) {
@@ -859,7 +943,9 @@ function boot() {
     buildRadar();
     RT.lines.material.color.setHex(C.ray); RT.hits.material.color.setHex(C.ray); RT.wave.material.color.setHex(C.wave);
     PT.points.material.color.setHex(C.pts);
-    PT.path.children[0].material.color.setHex(C.tx); PT.path.children[1].material.color.setHex(C.rx);
+    [PT.trailMat, PT.profMat].forEach((m) => m && m.color.setHex(C.pts));
+    if (PT.axisMat) PT.axisMat.color.setHex(axisHex());
+    (PT.arcs || []).forEach((l) => l.material.color.setHex(C.pts));
     const lab = GS.fanLab; G.fan.remove(lab); lab.material.map.dispose(); lab.material.dispose();
     const nl = textSprite('range-azimuth map', C.ink, 64, 700); sizeSprite(nl, 0.62);
     nl.position.copy(lab.position); nl.material.opacity = lab.material.opacity; GS.fanLab = nl; G.fan.add(nl);
