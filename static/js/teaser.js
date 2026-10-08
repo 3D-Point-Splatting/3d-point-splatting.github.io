@@ -259,8 +259,15 @@ function boot() {
     VIEWS.pts = { p: flat(at(-4.6, 3.4, -3.6)), t: flat(at(5.8, -0.3, 0.6)), u: [0, 1, 0] };
     // ONE camera for all three docked screenshots, so the tiles differ only
     // in the primitive, not the viewpoint. Each act pans here before its
-    // shot is taken, and FINAL (the skip path) uses it too.
-    VIEWS.shot = VIEWS.pts;
+    // shot is taken, and FINAL (the skip path) uses it too. It is pulled
+    // back from the 3DPS framing along its own view axis: that framing is a
+    // close-up, and the tile needs enough of the scene to read as context.
+    const pullBack = (v, k) => {
+      const t = new THREE.Vector3().fromArray(v.t);
+      const p = new THREE.Vector3().fromArray(v.p).sub(t).multiplyScalar(k).add(t);
+      return { p: p.toArray(), t: v.t.slice(), u: v.u.slice() };
+    };
+    VIEWS.shot = pullBack(VIEWS.pts, 1.38);   // subject ~27% smaller in frame
 
     buildRadar();
     buildRays(meta);
