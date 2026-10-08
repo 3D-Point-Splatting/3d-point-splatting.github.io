@@ -544,7 +544,9 @@ function boot() {
   // the plot (deck geometry: x = log runtime 8.4, y = memory 6.0 deep,
   // z = accuracy 5.2 up; three.js: (x, acc, -mem))
   // ════════════════════════════════════════════════════════════════════
-  const XL = 8.4, YL = 6.0, ZL = 5.2, PDIST = 19.2;
+  // PDIST 19.2 framed the axes but clipped their captions against the
+  // card; the captions reach x = -1.6 and acc = -1.5, ~12% beyond the box
+  const XL = 8.4, YL = 6.0, ZL = 5.2, PDIST = 21.8;
   const pv = (x, mem, acc) => new THREE.Vector3(x, acc, -mem);
   function px(t, d) { return (Math.log10(t) - Math.log10(d.t[0])) / (Math.log10(d.t[1]) - Math.log10(d.t[0])) * XL; }
   const pza = (a, d) => (a - d.a[0]) / (d.a[1] - d.a[0]) * ZL;
@@ -636,7 +638,7 @@ function boot() {
       const mat = new THREE.MeshBasicMaterial({ color: hollow ? over(e, 0.32, C.bg) : e });
       g.add(new THREE.Mesh(new THREE.SphereGeometry(R * (ours ? 1.15 : 1), 24, 16), mat));
       const lab = textSprite(m.name, hex(ours ? emission(C.ours, 2.0).getHex() : C.ink), 64, ours ? 700 : 500);
-      sizeSprite(lab, ours ? 0.74 : 0.58);
+      sizeSprite(lab, ours ? 0.90 : 0.71);          // +22% for legibility
       const LO = { 'DART': [0.85, 0.45], 'Radar Fields': [0.0, 0.66], 'RadarSplat': [1.05, 0.48],
                    'Sionna-RT': [-1.05, 0.48], 'mmIR': [0.0, -0.66], '3DPS': [0.0, 0.78] }[m.name] || [0, 0.66];
       lab.position.set(LO[0], LO[1], 0);
@@ -731,33 +733,31 @@ function boot() {
     { // 0 Scene
       async play(id) {
         await head('', null, id);
-        const a = VIEWS.wide, b = { ...VIEWS.wide, p: lerpV(VIEWS.wide.p, VIEWS.rt.p, 0.25) };
+        const a = { ...VIEWS.shot, p: lerpV(VIEWS.shot.p, VIEWS.wide.p, 0.45) }, b = VIEWS.shot;
         S.cam = a;
         await tween(2600, id, (t) => { S.cam = { p: lerpV(a.p, b.p, t), t: a.t, u: a.u }; });
       },
-      finish() { S.cam = VIEWS.wide; },
+      finish() { S.cam = VIEWS.shot; },
     },
     { // 1 Ray tracing
       async play(id) {
         await head('Prior Methods: Mesh + MC Ray-Tracing', RED, id);
-        await camTo(VIEWS.rt, 1500, id);
+        await camTo(VIEWS.shot, 900, id);      // a no-op unless the user skipped in
         await tween(2900, id, (t) => { S.rt.r = t * M.rmax * 0.78; }, ease.lin);
         await tween(1500, id, (t) => { S.rt.paths = t; }, ease.lin);
         pCard.classList.add('on');
         await hold(350, id);
         await addMarks(['Sionna-RT', 'mmIR'], id);
         await hold(450, id);
-        await camTo(VIEWS.shot, 1200, id);
-        await hold(250, id);
         await dockFly('mc', id);
         await tween(500, id, (t) => { S.rt.r = M.rmax * 0.78 * (1 - t); S.rt.paths = 1 - t; });
       },
-      finish() { P.show['Sionna-RT'] = P.show.mmIR = 1; pCard.classList.add('on'); dockInstant('mc'); S.rt = { r: 0, paths: 0 }; },
+      finish() { P.show['Sionna-RT'] = P.show.mmIR = 1; pCard.classList.add('on'); dockInstant('mc'); S.rt = { r: 0, paths: 0 }; S.cam = VIEWS.shot; },
     },
     { // 2 Splatting
       async play(id) {
         await head('Prior Methods: NeRF/3DGS Primitives', RED, id);
-        await camTo(VIEWS.gs, 1300, id);
+        await camTo(VIEWS.shot, 900, id);      // a no-op unless the user skipped in
         await tween(1900, id, (t) => { S.gs.grow = t * 1.6; }, ease.lin);
         await hold(400, id);
         await camTo(VIEWS.bev, 2200, id);
@@ -774,12 +774,12 @@ function boot() {
         S.gs = { grow: 0, drop: 0, fan: 0, fade: 0 };
       },
       finish() { ['DART', 'Radar Fields', 'RadarSplat'].forEach((n) => { P.show[n] = 1; }); dockInstant('inr');
-                 S.gs = { grow: 0, drop: 0, fan: 0, fade: 0 }; },
+                 S.gs = { grow: 0, drop: 0, fan: 0, fade: 0 }; S.cam = VIEWS.shot; },
     },
     { // 3 3DPS
       async play(id) {
         await head('3DPS: Point Primitives', GREEN, id);
-        await camTo(VIEWS.shot, 1700, id);
+        await camTo(VIEWS.shot, 900, id);      // a no-op: act 2 panned back here
         await tween(2600, id, (t) => { S.pts.frac = t; }, ease.out);
         await tween(1100, id, (t) => { S.pts.path = t; }, ease.lin);
         await addMarks(['3DPS'], id);

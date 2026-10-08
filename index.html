@@ -155,9 +155,14 @@
     /* an ID rule with display:flex outranks the UA's [hidden]{display:none},
        so the overlay has to opt out explicitly or it shows empty <img>s */
     #ra-overlay[hidden], #ra-slider[hidden] { display: none; }
+    /* each figure takes half the column and the image is bounded by it --
+       with height:auto the two maps could total more than the overlay and
+       spill past the viewer, which is what broke it on a phone */
     #ra-overlay figure { margin: 0; background: var(--ra-card); border-radius: 6px;
-                         padding: 0.22rem 0.22rem 0.1rem; backdrop-filter: blur(2px); }
-    #ra-overlay img { width: 100%; height: auto; display: block; border-radius: 4px; }
+                         padding: 0.22rem 0.22rem 0.1rem; backdrop-filter: blur(2px);
+                         flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+    #ra-overlay img { width: 100%; flex: 1 1 auto; min-height: 0; height: auto;
+                      object-fit: contain; display: block; border-radius: 4px; }
     #ra-overlay figcaption { text-align: center; font-size: 0.66rem; color: var(--fg);
                              margin-top: 0.12rem; line-height: 1.1; }
     #ra-slider { pointer-events: none; position: absolute; left: 50%; transform: translateX(-50%);
@@ -183,6 +188,13 @@
     :root { --ra-card: rgba(255, 255, 255, 0.82); }
     :root[data-theme="dark"] { --ra-card: rgba(26, 26, 30, 0.82); }
     @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --ra-card: rgba(26, 26, 30, 0.82); } }
+    /* 12/5 is far too short for a phone once the RA overlay is on */
+    @media (max-width: 760px) {
+      #viewer-wrap { aspect-ratio: 4 / 3 !important; }
+      #ra-overlay { width: min(38%, 160px); bottom: 2.9rem; }
+      #ra-overlay figcaption { font-size: 0.56rem; }
+      #ra-slider { width: min(60%, 320px); }
+    }
     #viewer-wrap { position: relative; width: 100%; aspect-ratio: 12 / 5; border-radius: 10px; overflow: hidden; background: var(--tile-bg); }
     #viewer-wrap canvas { width: 100% !important; height: 100% !important; display: block; }
     #viewer-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 0.9rem; }
@@ -547,18 +559,18 @@
       <div class="vtile">
         <div class="vtile-title">Scene Visualization</div>
         <div class="vtile-row">
-          <button class="chip on" data-color="geometry">geometry</button>
-          <button class="chip" data-color="normals">normals</button>
-          <button class="chip" data-color="materials">materials</button>
-          <button class="chip" data-toggle="mesh">LiDAR mesh</button>
+          <button class="chip on" data-color="geometry">Geometry</button>
+          <button class="chip" data-color="normals">Normals</button>
+          <button class="chip" data-color="materials">Materials</button>
+          <button class="chip" data-toggle="mesh">LiDAR Mesh</button>
         </div>
       </div>
       <div class="vtile">
         <div class="vtile-title">Sensor Visualization</div>
         <div class="vtile-row">
-          <button class="chip on" data-toggle="poses">radar poses</button>
-          <button class="chip" data-toggle="fov">field of view</button>
-          <button class="chip" data-toggle="ra">RA maps</button>
+          <button class="chip on" data-toggle="poses">Radar Poses</button>
+          <button class="chip" data-toggle="fov">Field of View</button>
+          <button class="chip" data-toggle="ra">RA Maps</button>
         </div>
       </div>
     </div>
@@ -785,8 +797,8 @@
   })();
 </script>
 
-<script type="module" src="./static/js/viewer.js?v=8"></script>
-<script type="module" src="./static/js/teaser.js?v=14"></script>
+<script type="module" src="./static/js/viewer.js?v=9"></script>
+<script type="module" src="./static/js/teaser.js?v=15"></script>
 
 </body>
 </html>
