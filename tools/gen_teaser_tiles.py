@@ -78,8 +78,13 @@ for i, key in enumerate(("mc", "inr", "pts")):
 # Only NVS is cropped now. Product-agnostic rendering is REBUILT by
 # gen_teaser_apps.py (two rows instead of three, bigger cells), so cropping
 # it here would overwrite that.
+# Crop BELOW the column's own header: _draw_nvs_column puts its title at
+# the column top (head_y = top - 0.06, body_top = head_y - 0.16, and the
+# column is inset 0.04 inside the crop), so 0.22 in off the top drops it.
+# The animated teaser sets these titles in HTML instead.
+NVS_HEAD = 0.22
 for i, name in ((2, "app_nvs.png"),):
-    rows.append(crop(XS[i], BODY_BOT, TW, COL_TOP - BODY_BOT, name))
+    rows.append(crop(XS[i], BODY_BOT, TW, COL_TOP - BODY_BOT - NVS_HEAD, name))
 
 for x0, y0, x1, y1, name in rows:
     print(f"  {name:<20s} {x1 - x0:4d} x {y1 - y0:4d} px   "

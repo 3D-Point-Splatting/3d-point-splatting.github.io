@@ -240,6 +240,9 @@
       gap: var(--t-dock-gap); pointer-events: none;
       transition: opacity .6s ease; z-index: 4; }
     #teaser-anim.apps .t-dock { opacity: 0; }
+    #teaser-anim.apps .t-pareto { width: calc(50% - 1.5 * var(--t-pad));
+      aspect-ratio: 1.37; height: auto; top: 0; bottom: 0; margin-block: auto;
+      max-height: calc(100% - 2 * var(--t-pad)); }
     #teaser-anim .t-slot { margin: 0; --c: var(--t-red); height: 100%; min-height: 0;
                            display: flex; align-items: center; }
     #teaser-anim .t-slot[data-fam="pts"] { --c: var(--t-green); }
@@ -265,7 +268,7 @@
                   border-radius 1s ease, border-width .5s ease; }
     #teaser-anim .t-fly img { width: 100%; height: 100%; object-fit: cover; display: block; }
     #teaser-anim .t-apps { position: absolute; left: var(--t-pad); top: var(--t-pad); bottom: var(--t-pad);
-      right: calc(var(--t-card-w) + 2 * var(--t-pad)); display: grid; z-index: 5;
+      right: calc(50% + 0.5 * var(--t-pad)); display: grid; z-index: 5;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       grid-template-rows: auto repeat(2, minmax(0, 1fr));
       gap: 2.2%; pointer-events: none; }
@@ -275,10 +278,25 @@
       opacity: 0; transform: translateY(8px);
       transition: opacity .5s ease, transform .5s ease; }
     #teaser-anim.apps .t-apps-head { opacity: 1; transform: none; }
-    #teaser-anim .t-app { margin: 0; min-height: 0; display: flex; align-items: center; justify-content: center;
-      opacity: 0; transform: translateY(12px); border-radius: 10px; padding: 1.6%;
-      background: var(--t-card); border: 1px solid var(--t-card-line);
+    #teaser-anim .t-app { margin: 0; min-height: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: flex-start;
+      opacity: 0; transform: translateY(12px);
       transition: opacity .55s ease, transform .55s ease; }
+    #teaser-anim .t-app figcaption { flex: 0 0 auto; margin: 0 0 1.5%; text-align: center;
+      line-height: 1.12; color: var(--fg);
+      font-family: "Times New Roman", Times, Georgia, serif; font-weight: 700;
+      font-size: clamp(.56rem, 1.05vw, .92rem); }
+    /* bounded by BOTH axes rather than stretched by flex: the panel keeps
+       its own aspect and takes whichever limit binds */
+    /* ONE fill per tile -- the panel's own, baked into the PNG. A second
+       card behind it was the two-tone look. In dark the panel's #26272c
+       equals the stage, so the edge comes from a hairline and a shadow
+       rather than a different fill, which also keeps the four consistent
+       (app_nvs is cropped from the paper teaser and cannot be re-tinted). */
+    #teaser-anim .t-app img { min-height: 0; max-width: 100%; max-height: 100%;
+      width: auto; height: auto; object-fit: contain; border-radius: 9px;
+      border: 1px solid var(--t-card-line);
+      box-shadow: 0 2px 12px rgba(0, 0, 0, .18); }
     #teaser-anim .t-app.on { opacity: 1; transform: none; }
     #teaser-anim .t-app img { max-width: 100%; max-height: 100%; width: auto; height: auto; display: block; }
     #teaser-anim .t-still { display: none; }
@@ -417,18 +435,18 @@
         </div>
         <div class="t-apps" id="t-apps">
         <p class="t-apps-head">Applications</p>
-        <figure class="t-app"><img class="themed"
-          data-light="./static/teaser/light/app_rendering.png?v=2" data-dark="./static/teaser/dark/app_rendering.png?v=2"
-          src="./static/teaser/light/app_rendering.png?v=2" alt="Product-agnostic rendering: ADC, CRP and RA from one fitted scene."></figure>
-        <figure class="t-app"><img class="themed"
-          data-light="./static/teaser/light/app_material.png?v=2" data-dark="./static/teaser/dark/app_material.png?v=2"
-          src="./static/teaser/light/app_material.png?v=2" alt="Material reconstruction: per-point relative permittivity."></figure>
-        <figure class="t-app"><img class="themed"
-          data-light="./static/teaser/light/app_normals.png?v=2" data-dark="./static/teaser/dark/app_normals.png?v=2"
-          src="./static/teaser/light/app_normals.png?v=2" alt="Normal estimation: per-point surface normals."></figure>
-        <figure class="t-app"><img class="themed"
-          data-light="./static/teaser/light/app_nvs.png?v=2" data-dark="./static/teaser/dark/app_nvs.png?v=2"
-          src="./static/teaser/light/app_nvs.png?v=2" alt="Novel view synthesis on held-out frames."></figure>
+        <figure class="t-app"><figcaption>Product-Agnostic Rendering</figcaption><img class="themed"
+          data-light="./static/teaser/light/app_rendering.png?v=3" data-dark="./static/teaser/dark/app_rendering.png?v=3"
+          src="./static/teaser/light/app_rendering.png?v=3" alt="Product-agnostic rendering: ADC, CRP and RA from one fitted scene."></figure>
+        <figure class="t-app"><figcaption>Material Reconstruction</figcaption><img class="themed"
+          data-light="./static/teaser/light/app_material.png?v=3" data-dark="./static/teaser/dark/app_material.png?v=3"
+          src="./static/teaser/light/app_material.png?v=3" alt="Material reconstruction: per-point relative permittivity."></figure>
+        <figure class="t-app"><figcaption>Normal Estimation</figcaption><img class="themed"
+          data-light="./static/teaser/light/app_normals.png?v=3" data-dark="./static/teaser/dark/app_normals.png?v=3"
+          src="./static/teaser/light/app_normals.png?v=3" alt="Normal estimation: per-point surface normals."></figure>
+        <figure class="t-app"><figcaption>Novel View Synthesis</figcaption><img class="themed"
+          data-light="./static/teaser/light/app_nvs.png?v=3" data-dark="./static/teaser/dark/app_nvs.png?v=3"
+          src="./static/teaser/light/app_nvs.png?v=3" alt="Novel view synthesis on held-out frames."></figure>
         </div>
       </div>
       <div class="t-still"><img class="themed"
@@ -798,7 +816,7 @@
 </script>
 
 <script type="module" src="./static/js/viewer.js?v=10"></script>
-<script type="module" src="./static/js/teaser.js?v=17"></script>
+<script type="module" src="./static/js/teaser.js?v=18"></script>
 
 </body>
 </html>

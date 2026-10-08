@@ -74,16 +74,14 @@ def project(p):
     return (v @ right) / zc / half_h, (v @ up) / zc / (half_h / ASPECT), v @ fwd
 
 
-def panel(name, title, colours):
+def panel(name, colours):
     fig = plt.figure(figsize=(W, H), dpi=DPI)
     fig.patch.set_facecolor("none")
     fig.patches.append(FancyBboxPatch(
         (0, 0), 1, 1, boxstyle=f"round,pad=0,rounding_size={R / W}",
         transform=fig.transFigure, facecolor=TILE, edgecolor="none",
         zorder=0, mutation_aspect=W / H))
-    fig.text(0.5, 1 - 0.055 / H, title, ha="center", va="top", fontsize=6.6,
-             fontweight="bold", color=HEAD, zorder=3)
-    ax = fig.add_axes([0.045, 0.045, 0.91, 0.79], zorder=2)
+    ax = fig.add_axes([0.03, 0.035, 0.94, 0.93], zorder=2)
     ax.set_facecolor("none"); ax.axis("off")
     for p, c, s in ((mv, np.tile(MESH, (len(mv), 1)), 0.035),
                     (pos, colours, 0.05)):
@@ -94,9 +92,9 @@ def panel(name, title, colours):
     u, v, d = project(pos)
     k = d > 0.1
     cx, cy = (u[k].min() + u[k].max()) / 2 * ASPECT, (v[k].min() + v[k].max()) / 2
-    hw = np.ptp(u[k]) * ASPECT / 2 * 1.04
-    hh = np.ptp(v[k]) / 2 * 1.04
-    box = (W - 0.09) / (H * 0.79)
+    hw = np.ptp(u[k]) * ASPECT / 2 * 0.90      # fill the tile, not 4% inside it
+    hh = np.ptp(v[k]) / 2 * 0.90
+    box = (W * 0.94) / (H * 0.93)
     if hw / hh < box:
         hw = hh * box
     else:
@@ -112,12 +110,12 @@ def panel(name, title, colours):
           f"{Image.open(p_out).size[1]} px")
 
 
-panel("app_material.png", "Material Reconstruction", mat)
+panel("app_material.png", mat)
 # normals are rgb=(n+1)/2 and so inherently pastel; on the light tile they
 # wash out, the same effect measured in the viewer (median 2.27:1 against
 # the background). Same correction, same factor, hue preserved.
 NRM = nrm * 0.75 if THEME == "light" else nrm
-panel("app_normals.png", "Normal Estimation", NRM)
+panel("app_normals.png", NRM)
 
 
 # ── product-agnostic rendering ───────────────────────────────────────────
@@ -136,8 +134,7 @@ def rendering():
     fig.patches.append(FancyBboxPatch(
         (0, 0), 1, 1, boxstyle=f"round,pad=0,rounding_size={R / W}",
         transform=fig.transFigure, facecolor=TILE, edgecolor="none", zorder=0))
-    fig.text(0.5, 1 - 0.055 / H, "Product-Agnostic Rendering", ha="center",
-             va="top", fontsize=6.6, fontweight="bold", color=HEAD, zorder=3)
+
     # The label column is sized from the MEASURED width of "Methods" --
     # guessing it cost two rounds of clipping. Everything left over, minus
     # the two arrow gaps, goes to the three cells.
@@ -150,7 +147,7 @@ def rendering():
     LW = LAB_W + 0.055 + MG
     cw = (W - 2 * MG - LW - 2 * AW) / 3.0
     ch = cw                                   # the sources are square
-    hdr_y = H - 0.055 - 0.085 - 0.075
+    hdr_y = H - 0.085
     top = hdr_y - 0.075
     y1 = top - ch                             # row 1 (3DPS)
     y0 = y1 - GAP - ch                        # row 2 (prior methods)
