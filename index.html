@@ -528,17 +528,19 @@
     <p class="section-desc wide">Ray tracing methods require LiDAR meshing, tracing for hit points, raw ADC samples per (TX, RX) pair per hit, and a range-profile transform. 3DPS keeps LiDAR points as scattering sites (no meshing or tracing) and splats these points onto the complex range profile directly (fewer scatter-adds). 3DPS fits eight viewpoints in 3.17&nbsp;min against 77.59 for mmIR on an RTX&nbsp;4090 GPU.</p>
     <div class="ov-grid">
       <div class="ov-card">
-        <video id="seq-rt" class="themed" data-seq
-               data-light="./static/videos/pipeline_runtime_light.mp4?v=2"
-               data-dark="./static/videos/pipeline_runtime_dark.mp4?v=2"
-               muted playsinline preload="auto"></video>
+        <video id="seq-rt" class="themed"
+               data-light="./static/videos/pipeline_runtime_sync_light.mp4?v=1"
+               data-dark="./static/videos/pipeline_runtime_sync_dark.mp4?v=1"
+               src="./static/videos/pipeline_runtime_sync_light.mp4?v=1"
+               autoplay muted loop playsinline webkit-playsinline preload="auto"></video>
         <div class="ov-label"><span class="cap-prob">Ray Tracing for ADC Synthesis</span></div>
       </div>
       <div class="ov-card">
-        <video id="seq-sp" class="themed" data-seq
-               data-light="./static/videos/runtime_splatting_light.mp4?v=3"
-               data-dark="./static/videos/runtime_splatting_dark.mp4?v=3"
-               muted playsinline preload="auto"></video>
+        <video id="seq-sp" class="themed"
+               data-light="./static/videos/runtime_splatting_sync_light.mp4?v=1"
+               data-dark="./static/videos/runtime_splatting_sync_dark.mp4?v=1"
+               src="./static/videos/runtime_splatting_sync_light.mp4?v=1"
+               autoplay muted loop playsinline webkit-playsinline preload="auto"></video>
         <div class="ov-label"><span class="cap-imp">Splatting (3DPS)</span></div>
       </div>
     </div>
@@ -754,90 +756,26 @@
     });
   })();
 
-  // Ray Tracing vs Splatting: the two clips play IN TURN, not together.
-  // Each pauses the moment its yellow highlight reaches "7 range-azimuth
-  // map"; then BOTH rewind smoothly back to "1 LiDAR points", each at
-  // its own pace, and the next cycle starts once both are home.
-  // Cue times measured by tracking the amber box through the frames:
-  //   ray tracing  step 1 @ 1.10s, step 7 @ 13.87s,
-  //                rewind 18.50s -> step 1 @ 20.70s (built into the clip)
-  //   splatting    step 1 @ 0.00s, step 7 @ 6.40s,
-  //                rewind 6.80s -> step 1 @ 8.83s (a time-compressed
-  //                reverse of its own motion, appended by tools/)
+  // Ray Tracing vs Splatting: the two clips carry the whole choreography
+  // (ray tracing 1 -> 7 while splatting waits on 1; splatting 1 -> 7 while
+  // ray tracing holds on 7; a hold; both rewind; both rearm on 1), cut to
+  // the same length (tools/, from the original clips), so they just
+  // autoplay and loop like every other clip. The only script is a resync:
+  // two independent loops drift by a frame or two per cycle, and one of
+  // them pauses when it scrolls off screen.
   (function () {
-    var a = document.getElementById('seq-rt');
-    var b = document.getElementById('seq-sp');
+    var a = document.getElementById('seq-rt'), b = document.getElementById('seq-sp');
     if (!a || !b) return;
-    var A0 = 1.10, A1 = 14.10;      // ray tracing: step 1 -> step 7
-                                    // (14.10 > 13.97, when the step-7 LABEL
-                                    //  finishes turning amber; 13.95 paused
-                                    //  mid-transition with white text)
-    var AR0 = 18.40, AR1 = 20.80;   // ray tracing: its rewind, step 7 -> step 1
-    var B0 = 0.00, B1 = 6.80;       // splatting:   step 1 -> step 7
-    var BR0 = 6.80, BR1 = 9.15;     // splatting:   its rewind, step 7 -> step 1
-    var HOLD = 900, REARM = 800;    // ms on "both at step 7" / "both at step 1"
-    var phase = 'a', timer = null;
-
-    function seek(v, t) { try { if (Math.abs(v.currentTime - t) > 0.04) v.currentTime = t; } catch (e) {} }
-    function ready(v) { return v.readyState >= 1 && isFinite(v.duration) && v.duration > 0; }
-    function play(v) { if (v.paused) v.play().catch(function () {}); }
-    function stop(v) { if (!v.paused) v.pause(); }
-    // iOS Safari does not load a clip's metadata until play() is called,
-    // so ready() would stay false forever: a muted play() (allowed without
-    // a gesture) starts the load, and the phase logic below pauses the
-    // clip again on the next frame if it is not its turn
-    function kick(v) {
-      var now = Date.now();
-      if (ready(v) || (v.__kick && now - v.__kick < 2000)) return;
-      v.__kick = now; v.play().catch(function () {});
-    }
-    window.__seqKick = function () { a.__kick = b.__kick = 0; kick(a); kick(b); };
-
-    function toRewind() { timer = null; seek(a, AR0); seek(b, BR0); phase = 'rw'; }
-
-    function restart() {                 // both land on step 1 together
-      timer = null;
-      stop(a); stop(b); seek(a, A0); seek(b, B0);
-      phase = 'rearm';
-      timer = setTimeout(function () { timer = null; phase = 'a'; }, REARM);
-    }
-
     function tick() {
-      if (!ready(a)) kick(a);
-      if (!ready(b)) kick(b);
-      if (ready(a) && ready(b)) {
-        if (phase === 'a') {
-          stop(b); seek(b, B0);                    // splatting waits on step 1
-          if (a.currentTime >= A1) { stop(a); seek(a, A1); phase = 'b'; }
-          else { if (a.currentTime < A0 - 0.05) seek(a, A0); play(a); }
-        } else if (phase === 'b') {
-          stop(a);                                 // ray tracing holds on step 7
-          if (b.currentTime >= B1) {
-            stop(b); seek(b, B1); phase = 'hold';
-            if (!timer) timer = setTimeout(toRewind, HOLD);
-          } else play(b);
-        } else if (phase === 'rw') {
-          var aDone = a.currentTime >= AR1, bDone = b.currentTime >= BR1;
-          if (aDone) { stop(a); seek(a, AR1); }
-          else { if (a.currentTime < AR0 - 0.05) seek(a, AR0); play(a); }
-          if (bDone) { stop(b); seek(b, BR1); }
-          else { if (b.currentTime < BR0 - 0.05) seek(b, BR0); play(b); }
-          if (aDone && bDone) restart();           // both home -> next cycle
-        } else {
-          stop(a); stop(b);                        // hold / rearm
+      if (a.readyState >= 1 && b.readyState >= 1 && !a.paused && !b.paused) {
+        var d = a.currentTime - b.currentTime;
+        if (Math.abs(d) > 0.12 && Math.abs(d) < a.duration - 0.5) {
+          try { b.currentTime = a.currentTime; } catch (e) {}
         }
       }
-      requestAnimationFrame(tick);
+      setTimeout(tick, 500);
     }
-
-    [[a, A0], [b, B0]].forEach(function (pair) {
-      var v = pair[0], t = pair[1];
-      if (ready(v)) seek(v, t);
-      else v.addEventListener('loadedmetadata', function once() {
-        v.removeEventListener('loadedmetadata', once); seek(v, t);
-      });
-    });
-    requestAnimationFrame(tick);
+    tick();
   })();
 
   // Mobile fallbacks: iOS pauses or never starts autoplay clips that are off
