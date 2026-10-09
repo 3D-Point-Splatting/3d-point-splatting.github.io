@@ -694,6 +694,10 @@
       }
       el.setAttribute('src', src);
       el.load();
+      // iOS Safari fetches nothing (not even metadata) until play() is
+      // called; for a muted inline video that call is allowed without a
+      // gesture, so ask right away rather than from the metadata callback
+      if (el.hasAttribute('autoplay')) el.play().catch(function () {});
       var seek = function () {
         el.removeEventListener('loadedmetadata', seek);
         if (el._tdpsSeek === seek) el._tdpsSeek = null;
@@ -778,6 +782,16 @@
     function ready(v) { return v.readyState >= 1 && isFinite(v.duration) && v.duration > 0; }
     function play(v) { if (v.paused) v.play().catch(function () {}); }
     function stop(v) { if (!v.paused) v.pause(); }
+    // iOS Safari does not load a clip's metadata until play() is called,
+    // so ready() would stay false forever: a muted play() (allowed without
+    // a gesture) starts the load, and the phase logic below pauses the
+    // clip again on the next frame if it is not its turn
+    function kick(v) {
+      var now = Date.now();
+      if (ready(v) || (v.__kick && now - v.__kick < 2000)) return;
+      v.__kick = now; v.play().catch(function () {});
+    }
+    window.__seqKick = function () { a.__kick = b.__kick = 0; kick(a); kick(b); };
 
     function toRewind() { timer = null; seek(a, AR0); seek(b, BR0); phase = 'rw'; }
 
@@ -789,6 +803,8 @@
     }
 
     function tick() {
+      if (!ready(a)) kick(a);
+      if (!ready(b)) kick(b);
       if (ready(a) && ready(b)) {
         if (phase === 'a') {
           stop(b); seek(b, B0);                    // splatting waits on step 1
@@ -822,6 +838,26 @@
       });
     });
     requestAnimationFrame(tick);
+  })();
+
+  // Mobile fallbacks: iOS pauses or never starts autoplay clips that are off
+  // screen, and Low Power Mode blocks autoplay until a gesture. Nudge every
+  // autoplay clip as it enters the viewport, and once on the first touch.
+  (function () {
+    var clips = Array.prototype.slice.call(document.querySelectorAll('video[autoplay]'));
+    function nudge(v) { if (v.paused) v.play().catch(function () {}); }
+    if ('IntersectionObserver' in window) {
+      var io = new IntersectionObserver(function (es) {
+        es.forEach(function (e) { if (e.isIntersecting) nudge(e.target); });
+      }, { threshold: 0.1 });
+      clips.forEach(function (v) { io.observe(v); });
+    }
+    var unlock = function () {
+      clips.forEach(nudge);
+      if (window.__seqKick) window.__seqKick();
+    };
+    document.addEventListener('touchend', unlock, { once: true, passive: true });
+    document.addEventListener('pointerdown', unlock, { once: true, passive: true });
   })();
 </script>
 
