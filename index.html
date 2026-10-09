@@ -238,8 +238,11 @@
       bottom: var(--t-pad); height: var(--t-dock-h);
       display: flex; justify-content: center; align-items: center;
       gap: var(--t-dock-gap); pointer-events: none;
-      transition: opacity .6s ease; z-index: 4; }
+      transition: opacity .6s ease, transform .35s ease; z-index: 4; }
     #teaser-anim.apps .t-dock { opacity: 0; }
+    /* tucked out of the stage while the 3DPS act shows the range-azimuth map,
+       so the map is not covered by the row of shots */
+    #teaser-anim.tuck .t-dock { transform: translateY(130%); }
     #teaser-anim.apps .t-pareto { width: calc(50% - 1.5 * var(--t-pad));
       aspect-ratio: 1.37; height: auto; top: 0; bottom: 0; margin-block: auto;
       max-height: calc(100% - 2 * var(--t-pad)); }
@@ -800,7 +803,7 @@
 </script>
 
 <script type="module" src="./static/js/viewer.js?v=10"></script>
-<script type="module" src="./static/js/teaser.js?v=34"></script>
+<script type="module" src="./static/js/teaser.js?v=35"></script>
 
 </body>
 </html>

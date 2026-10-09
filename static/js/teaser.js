@@ -287,9 +287,11 @@ function boot() {
     const bevT = fanC.clone().addScaledVector(bevR, -2.6).addScaledVector(bevUp, 1.0);
     VIEWS.bev = { p: flat(bevT.clone().add(new THREE.Vector3(0, 27.0, 0)).addScaledVector(bevUp, -0.8)),
                   t: flat(bevT), u: bevUp.toArray() };
-    { const rc = tx.clone().addScaledVector(bo, RTOP * 0.5);
-      const rT = rc.clone().addScaledVector(bevR, -2.6).addScaledVector(bevUp, 1.0);
-      VIEWS.ram = { p: flat(rT.clone().add(new THREE.Vector3(0, 25.0, 0)).addScaledVector(bevUp, -0.8)), t: flat(rT), u: bevUp.toArray() }; }
+    { // the map's square (15.19 m, apex on the radar) centred: the view offset
+      // puts the target at the centre of the band left of the card, and with the
+      // dock tucked and the lift at 0, 30 m up fits the square in the height
+      const rc = tx.clone().addScaledVector(bo, RTOP * 0.5);
+      VIEWS.ram = { p: flat(rc.clone().add(new THREE.Vector3(0, 30.0, 0)).addScaledVector(bevUp, -0.8)), t: flat(rc), u: bevUp.toArray() }; }
     VIEWS.pts = { p: flat(at(-4.6, 3.4, -3.6)), t: flat(at(5.8, -0.3, 0.6)), u: [0, 1, 0] };
     // ONE camera for all three docked screenshots, so the tiles differ only
     // in the primitive, not the viewpoint. Each act pans here before its
@@ -1354,8 +1356,10 @@ function boot() {
         //   comes in once the morph is half done, the two undo fades run
         //   together, and the lift and the camera's return happen at once.
         const glowOf = (d) => Math.max(0, Math.min(1, (d - 0.25) / 0.6));
+        root.classList.add('tuck');            // the row of shots slides out of the stage
         await Promise.all([
           camTo(VIEWS.ram, 2200, id),
+          tween(2200, id, (t) => { setLift(1 - t); }),
           (async () => { await hold(800, id); await tween(2400, id, (t) => { S.pts.drop = t; S.pts.glow = glowOf(t); }, ease.lin); })(),
         ]);
         await hold(300, id);
@@ -1370,7 +1374,11 @@ function boot() {
         ]);
         await Promise.all([
           tween(1200, id, (t) => { S.pts.drop = 1 - t; S.pts.glow = glowOf(1 - t); }, ease.lin),
-          (async () => { await hold(300, id); await camTo(VIEWS.shot, 1400, id); })(),
+          (async () => {
+            await hold(300, id);
+            root.classList.remove('tuck');     // the row of shots comes back with the camera
+            await Promise.all([camTo(VIEWS.shot, 1400, id), tween(1400, id, (t) => { setLift(t); })]);
+          })(),
         ]);
         await hold(300, id);
         await addMarks(['3DPS'], id);
@@ -1407,6 +1415,7 @@ function boot() {
     pCard.classList.remove('on', 'glow');
     root.querySelectorAll('.t-slot').forEach((s) => s.classList.remove('on'));
     root.querySelectorAll('.t-fly').forEach((f) => f.remove());
+    root.classList.remove('tuck'); setLift(1);
     apps(false);
   }
   async function playFrom(ch) {
@@ -1462,18 +1471,25 @@ function boot() {
   window.addEventListener('tdps-theme', applyTheme);
   const dockEl = document.getElementById('t-dock');
   let midX = 0.5;                                    // centre of the free band, as a stage fraction
+  let lift = 1, dockH = 0;                           // the lift clear of the dock, 0 while it is tucked
+  function applyOffset() {
+    const w = sceneWrap.clientWidth, h = sceneWrap.clientHeight;
+    if (!w || !h) return;
+    camera.setViewOffset(w, h, -(midX - 0.5) * w, lift * dockH / 2, w, h);
+    camera.updateProjectionMatrix();
+  }
+  function setLift(k) { lift = k; applyOffset(); }
   function resize() {
     const w = sceneWrap.clientWidth, h = sceneWrap.clientHeight;
     if (w && h) {
       renderer.setSize(w, h, false); camera.aspect = w / h;
       const st = stage.getBoundingClientRect(), cd = pCard.getBoundingClientRect();
       const band = Math.max(1, cd.left - st.left);
-      const dockH = dockEl.getBoundingClientRect().height;
+      dockH = dockEl.getBoundingClientRect().height;
       midX = (band / 2) / st.width;
       // centre the scene in the band left of the card, and lift it clear of
       // the row of shots along the bottom
-      camera.setViewOffset(w, h, -(midX - 0.5) * w, dockH / 2, w, h);
-      camera.updateProjectionMatrix();
+      applyOffset();
       headEl.style.left = (midX * 100) + '%';
       // keep the title inside that band whatever the string length
       headEl.style.maxWidth = Math.max(90, band - 22) + 'px';
