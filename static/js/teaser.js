@@ -1318,7 +1318,7 @@ function boot() {
     { // 3 3DPS: five beats, each held on its end state before the next
       async play(id) {
         await head('3DPS: Point Primitives', GREEN, id);
-        await camTo(VIEWS.shot, 250, id);      // a no-op: act 2 panned back here
+        S.cam = VIEWS.shot;                    // act 2 panned back here already
         // 1 the points
         await tween(1400, id, (t) => { S.pts.frac = t; }, ease.out);
         await hold(600, id);
@@ -1339,27 +1339,39 @@ function boot() {
         //   the profile
         await tween(2600, id, (t) => { S.pts.collapse = t; }, ease.lin);
         await tween(500, id, (t) => { S.pts.prof = t; }, ease.out);
-        await hold(1000, id);
+        await hold(800, id);
         // 5 the histogram goes and the cloud comes back: the act rests on the
         //   points alone, which is also what the dock tile is a shot of
         await tween(1000, id, (t) => { S.pts.collapse = 1 - t; S.pts.snap = 1 - t;
                                        S.pts.fade = t; }, ease.io);
-        await hold(400, id);
+        await hold(300, id);
         // 6 the range-azimuth map: the camera to bird's-eye; the points land on
         //   the radar's plane and light up with their density; each runs to the
         //   rendered map's value at its spot; the render fills in underneath;
-        //   a hold; and everything comes back for the dock shot
-        await camTo(VIEWS.ram, 2200, id);
-        await tween(2400, id, (t) => { S.pts.drop = t; S.pts.glow = Math.max(0, Math.min(1, (t - 0.25) / 0.6)); }, ease.lin);
+        //   a hold; and everything comes back for the dock shot. Steps that do
+        //   not depend on each other overlap, so no motion is any faster: the
+        //   points start landing while the camera is still rising, the render
+        //   comes in once the morph is half done, the two undo fades run
+        //   together, and the lift and the camera's return happen at once.
+        const glowOf = (d) => Math.max(0, Math.min(1, (d - 0.25) / 0.6));
+        await Promise.all([
+          camTo(VIEWS.ram, 2200, id),
+          (async () => { await hold(800, id); await tween(2400, id, (t) => { S.pts.drop = t; S.pts.glow = glowOf(t); }, ease.lin); })(),
+        ]);
         await hold(300, id);
-        await tween(1600, id, (t) => { S.pts.real = t; }, ease.io);
-        await tween(1200, id, (t) => { S.pts.img = t; }, ease.io);
-        await hold(2000, id);
-        await tween(800, id, (t) => { S.pts.img = 1 - t; }, ease.io);
-        await tween(1000, id, (t) => { S.pts.real = 1 - t; }, ease.io);
-        await hold(200, id);
-        await tween(1200, id, (t) => { S.pts.drop = 1 - t; S.pts.glow = Math.max(0, Math.min(1, (1 - t - 0.25) / 0.6)); }, ease.lin);
-        await camTo(VIEWS.shot, 1400, id);
+        await Promise.all([
+          tween(1600, id, (t) => { S.pts.real = t; }, ease.io),
+          (async () => { await hold(800, id); await tween(1200, id, (t) => { S.pts.img = t; }, ease.io); })(),
+        ]);
+        await hold(1600, id);
+        await Promise.all([
+          tween(800, id, (t) => { S.pts.img = 1 - t; }, ease.io),
+          tween(1000, id, (t) => { S.pts.real = 1 - t; }, ease.io),
+        ]);
+        await Promise.all([
+          tween(1200, id, (t) => { S.pts.drop = 1 - t; S.pts.glow = glowOf(1 - t); }, ease.lin),
+          (async () => { await hold(300, id); await camTo(VIEWS.shot, 1400, id); })(),
+        ]);
         await hold(300, id);
         await addMarks(['3DPS'], id);
         await hold(250, id);
