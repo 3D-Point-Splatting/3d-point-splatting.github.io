@@ -299,6 +299,9 @@ function boot() {
       return { p: p.toArray(), t: v.t.slice(), u: v.u.slice() };
     };
     VIEWS.shot = pullBack(VIEWS.pts, 1.38);   // subject ~27% smaller in frame
+    // where act 0 begins its push-in: the stage sits here from the first
+    // frame after load until the act starts, so nothing cuts before it
+    VIEWS.start = { ...VIEWS.shot, p: lerpV(VIEWS.shot.p, VIEWS.wide.p, 0.45) };
 
     buildRadar();
     buildRays(meta);
@@ -1172,9 +1175,9 @@ function boot() {
   const CH = [
     { // 0 Scene
       async play(id) {
+        const a = VIEWS.start, b = VIEWS.shot;
+        S.cam = a;                              // already there: no cut after the title hold
         await head('', null, id);
-        const a = { ...VIEWS.shot, p: lerpV(VIEWS.shot.p, VIEWS.wide.p, 0.45) }, b = VIEWS.shot;
-        S.cam = a;
         await tween(2600, id, (t) => { S.cam = { p: lerpV(a.p, b.p, t), t: a.t, u: a.u }; });
       },
       finish() { S.cam = VIEWS.shot; },
@@ -1257,11 +1260,11 @@ function boot() {
         await head('', null, id);
         pCard.classList.add('glow');
         await tween(1400, id, (t) => { P.surf = t; });
-        await camTo(VIEWS.wide, 2200, id);
-        await hold(2600, id);
+        // the camera stays where the three tiles were shot: no pan here
+        await hold(3200, id);
         pCard.classList.remove('glow');
       },
-      finish() { P.surf = 1; S.cam = VIEWS.wide; },
+      finish() { P.surf = 1; S.cam = VIEWS.shot; },
     },
     { // 5 Applications
       async play(id) {
@@ -1274,7 +1277,7 @@ function boot() {
   ];
 
   function resetAll() {
-    S = fresh(); S.cam = VIEWS.wide;
+    S = fresh(); S.cam = VIEWS.start;
     for (const k of Object.keys(P.show)) P.show[k] = 0;
     P.surf = 0;
     pCard.classList.remove('on', 'glow');
@@ -1389,7 +1392,7 @@ function boot() {
     renderer.setClearColor(STAGE[theme()].bg, 1);
     buildPlot();
     resize();
-    S.cam = VIEWS.wide;
+    S.cam = VIEWS.start;
     const pc = plotCam(26, 17, PDIST);
     pcam.position.copy(pc.p); pctl.target.copy(pc.t); pcam.lookAt(pc.t);
     // the reader may already have picked a chapter: only auto-start an idle stage
