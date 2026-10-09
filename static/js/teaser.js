@@ -178,7 +178,7 @@ function boot() {
   scene.add(amb, sun);
   const sprite = disc();
   const G = { radar: new THREE.Group(), rt: new THREE.Group(), gs: new THREE.Group(), fan: new THREE.Group(),
-              pts: new THREE.Group(), pth: new THREE.Group() };
+              pts: new THREE.Group(), pth: new THREE.Group(), ram: new THREE.Group() };
   Object.values(G).forEach((g) => scene.add(g));
   let mesh = null, M = null;                         // mesh, and the radar/scene geometry
   const RT = {}, GS = {}, PT = {};
@@ -214,8 +214,8 @@ function boot() {
   // the 3DPS act, one scalar per beat: 1 frac; 2 shells (all appear), sweep
   // (one bright shell runs through them, leaving its trace), shellOut;
   // 3 snap; 4 collapse (+ prof); 5 fade
-  const PTS0 = () => ({ frac: 0, shells: 0, sweep: 0, shellOut: 0, snap: 0, collapse: 0, prof: 0, fade: 0 });
-  const PTSF = () => ({ frac: 1, shells: 1, sweep: 1, shellOut: 1, snap: 0, collapse: 0, prof: 0, fade: 1 });
+  const PTS0 = () => ({ frac: 0, shells: 0, sweep: 0, shellOut: 0, snap: 0, collapse: 0, prof: 0, fade: 0, drop: 0, glow: 0, real: 0, img: 0 });
+  const PTSF = () => ({ frac: 1, shells: 1, sweep: 1, shellOut: 1, snap: 0, collapse: 0, prof: 0, fade: 1, drop: 0, glow: 0, real: 0, img: 0 });
   const fresh = () => ({ cam: null, rt: { r: 0, paths: 0 }, gs: { grow: 0, drop: 0, fan: 0, fade: 0 },
                          pts: PTS0() });
   let S = fresh();
@@ -287,6 +287,9 @@ function boot() {
     const bevT = fanC.clone().addScaledVector(bevR, -2.6).addScaledVector(bevUp, 1.0);
     VIEWS.bev = { p: flat(bevT.clone().add(new THREE.Vector3(0, 27.0, 0)).addScaledVector(bevUp, -0.8)),
                   t: flat(bevT), u: bevUp.toArray() };
+    { const rc = tx.clone().addScaledVector(bo, RTOP * 0.5);
+      const rT = rc.clone().addScaledVector(bevR, -2.6).addScaledVector(bevUp, 1.0);
+      VIEWS.ram = { p: flat(rT.clone().add(new THREE.Vector3(0, 25.0, 0)).addScaledVector(bevUp, -0.8)), t: flat(rT), u: bevUp.toArray() }; }
     VIEWS.pts = { p: flat(at(-4.6, 3.4, -3.6)), t: flat(at(5.8, -0.3, 0.6)), u: [0, 1, 0] };
     // ONE camera for all three docked screenshots, so the tiles differ only
     // in the primitive, not the viewpoint. Each act pans here before its
@@ -577,6 +580,7 @@ function boot() {
     // ── three position sets the cloud morphs through ────────────────────
     const a0 = new Float32Array(N * 3), a1 = new Float32Array(N * 3), a2 = new Float32Array(N * 3);
     const dir = new Float32Array(N * 3), rad = new Float32Array(N), dly = new Float32Array(N);
+    const a3 = new Float32Array(N * 3), dly2 = new Float32Array(N), mapX = new Float32Array(N), mapY = new Float32Array(N);
     const amp = new Float32Array(N);
     const binOf = new Int32Array(N), rbOf = new Float32Array(N);
     const d = new THREE.Vector3();
@@ -589,6 +593,11 @@ function boot() {
       binOf[i] = k; rbOf[i] = o.rb;
       d.subVectors(o.p, M.o).normalize();
       M.o.clone().addScaledVector(d, k * RB).addScaledVector(o.nf, 0.03).toArray(a1, 3 * i);
+      { // on the radar's azimuth plane, elevation collapsed (as the splats drop), and
+        // the point's place on the range-azimuth map: X along the array, Y out
+        const vv = o.p.clone().sub(M.tx); o.p.clone().addScaledVector(M.el, -vv.dot(M.el)).toArray(a3, 3 * i);
+        dly2[i] = ((i * 2654435761) % 1000) / 1000 * 0.6;
+        mapX[i] = vv.dot(M.ax); mapY[i] = Math.sqrt(Math.max(0, vv.lengthSq() - mapX[i] * mapX[i])); }
       d.toArray(dir, 3 * i); rad[i] = k * RB;
       // the collapse folds the fan in from its edges: a point starts the
       // sooner the further it sits from the boresight
@@ -615,6 +624,7 @@ function boot() {
         .toArray(a2, 3 * i);
     }
     PT.a0 = a0; PT.a1 = a1; PT.a2 = a2; PT.dir = dir; PT.rad = rad; PT.dly = dly;
+    PT.a3 = a3; PT.dly2 = dly2; PT.mapX = mapX; PT.mapY = mapY;
     PT.rb = rbOf; PT.bin = binOf; PT.n = N; PT.mk = null;
     PT.pink = new THREE.Color(C.pts);
     const g = new THREE.BufferGeometry();
@@ -787,6 +797,80 @@ function boot() {
     PT.prof = new THREE.Line(new THREE.BufferGeometry().setFromPoints(prof), PT.profMat);
     PT.prof.renderOrder = 6; PT.profN = NBIN;
     G.pth.add(PT.prof);
+    buildRaMap();
+  }
+
+  // The range-azimuth map, carried by the points. Its region is the real
+  // render's own (static/viewer/ra, this frame): X in [-R/2, R/2] along the
+  // array, Y in [0, R] out from the radar, R = 256 bins, apex on the radar.
+  // Every point gets the local density of the landed cloud (sampled from a
+  // rasterisation of the cloud on that grid, capped to the red end of the hot
+  // map) and the rendered map's value at its own spot, and draws as a soft
+  // additive splat whose brightness runs from the one to the other. The
+  // rendered image only fills what points cannot carry, underneath, at the end.
+  function buildRaMap() {
+    dispose(G.ram);
+    const R = RTOP, NX = 320, NY = 320, img = new Float32Array(NX * NY), N = PT.n;
+    for (let i = 0; i < N; i++) {
+      if (Math.abs(PT.mapX[i]) > R / 2 || PT.mapY[i] < 0 || PT.mapY[i] > R) continue;
+      const ix = (PT.mapX[i] / R + 0.5) * (NX - 1), iy = PT.mapY[i] / R * (NY - 1);
+      for (let a = Math.max(0, Math.floor(ix - 3)); a <= Math.min(NX - 1, Math.ceil(ix + 3)); a++)
+        for (let b = Math.max(0, Math.floor(iy - 3)); b <= Math.min(NY - 1, Math.ceil(iy + 3)); b++)
+          img[b * NX + a] += Math.exp(-((a - ix) ** 2 + (b - iy) ** 2) / 3.2);
+    }
+    let mx = 0;
+    for (let i = 0; i < img.length; i++) mx = Math.max(mx, img[i]);
+    mx = mx || 1;
+    const dens = new Float32Array(N), realV = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      const ix = Math.round((PT.mapX[i] / R + 0.5) * (NX - 1)), iy = Math.round(PT.mapY[i] / R * (NY - 1));
+      dens[i] = 0.45 * ((ix >= 0 && ix < NX && iy >= 0 && iy < NY && img[iy * NX + ix] > 0) ? Math.max(0, 1 + Math.log10(img[iy * NX + ix] / mx) / 2.2) : 0);
+    }
+    PT.dens = dens; PT.realV = realV; PT.realReady = false;
+    PT.hotLUT = new Float32Array(256 * 3);
+    for (let k = 0; k < 256; k++) { const [r, g, b] = hot(k / 255); PT.hotLUT[3 * k] = s2l(r / 255); PT.hotLUT[3 * k + 1] = s2l(g / 255); PT.hotLUT[3 * k + 2] = s2l(b / 255); }
+    const RA = `./static/viewer/ra/${SCENE}_f185_rd.png`;
+    const imel = new Image();
+    imel.onload = () => {                              // the render's value under every point
+      const cv = document.createElement('canvas'); cv.width = imel.width; cv.height = imel.height;
+      const cx = cv.getContext('2d'); cx.drawImage(imel, 0, 0);
+      const px = cx.getImageData(0, 0, cv.width, cv.height).data;
+      const lut = []; for (let k = 0; k < 256; k++) lut.push(hot(k / 255));
+      for (let i = 0; i < N; i++) {
+        const u = PT.mapX[i] / R + 0.5, v = PT.mapY[i] / R;
+        if (u < 0 || u > 1 || v < 0 || v > 1) { realV[i] = 0; continue; }
+        const X = Math.round(u * (cv.width - 1)), Y = Math.round((1 - v) * (cv.height - 1)), o = 4 * (Y * cv.width + X);
+        let best = 0, bd = 1e9;
+        for (let k = 0; k < 256; k += 2) { const d = (lut[k][0] - px[o]) ** 2 + (lut[k][1] - px[o + 1]) ** 2 + (lut[k][2] - px[o + 2]) ** 2; if (d < bd) { bd = d; best = k; } }
+        realV[i] = best / 255;
+      }
+      PT.realReady = true; PT.mk = null;
+    };
+    imel.src = RA;
+    const c = (X, Y) => M.o.clone().addScaledVector(M.ax, X).addScaledVector(M.bo, Y);
+    const q = [c(-R / 2, 0), c(R / 2, 0), c(R / 2, R), c(-R / 2, R)];
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(q.flatMap((v) => [v.x, v.y, v.z]), 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2)); g.setIndex([0, 1, 2, 0, 2, 3]);
+    const real = new THREE.TextureLoader().load(RA);
+    real.colorSpace = THREE.SRGBColorSpace;
+    PT.ramMat = new THREE.MeshBasicMaterial({ map: real, transparent: true, opacity: 0, side: THREE.DoubleSide, depthTest: false, depthWrite: false });
+    const m = new THREE.Mesh(g, PT.ramMat); m.renderOrder = 4;
+    G.ram.add(m); G.ram.visible = false;
+    // the glow: the cloud's positions, its own colours, a soft additive splat
+    const sc = document.createElement('canvas'); sc.width = sc.height = 64;
+    const sg = sc.getContext('2d'), grd = sg.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grd.addColorStop(0, 'rgba(255,255,255,1)'); grd.addColorStop(0.35, 'rgba(255,255,255,0.85)'); grd.addColorStop(0.7, 'rgba(255,255,255,0.3)'); grd.addColorStop(1, 'rgba(255,255,255,0)');
+    sg.fillStyle = grd; sg.fillRect(0, 0, 64, 64);
+    const soft = new THREE.CanvasTexture(sc); soft.colorSpace = THREE.SRGBColorSpace;
+    const gg = new THREE.BufferGeometry();
+    gg.setAttribute('position', PT.points.geometry.attributes.position);
+    gg.setAttribute('color', new THREE.BufferAttribute(new Float32Array(N * 3), 3));
+    gg.attributes.color.setUsage(THREE.DynamicDrawUsage);
+    PT.glow = new THREE.Points(gg, new THREE.PointsMaterial({ color: 0xffffff, size: 0.26, map: soft, transparent: true, opacity: 0,
+      depthTest: false, depthWrite: false, vertexColors: true, blending: THREE.AdditiveBlending }));
+    PT.glow.renderOrder = 5; PT.glow.visible = false;
+    G.pts.add(PT.glow);
   }
 
   // ════════════════════════════════════════════════════════════════════
@@ -847,12 +931,14 @@ function boot() {
     if (G.fan.visible) { GS.fanMat.opacity = 0.94 * gs.fan; GS.fanLab.material.opacity = gs.fan; }
     // points
     const pt = st.pts;
+    G.ram.visible = pt.img > 0.002;
+    if (G.ram.visible) PT.ramMat.opacity = pt.img;
     G.pts.visible = pt.frac > 0;
     if (G.pts.visible) PT.points.geometry.setDrawRange(0, Math.floor(PT.n * pt.frac));   // shared geometry
     const rig = 1 - pt.fade;                 // everything but the points, at the end
     G.pth.visible = pt.frac > 0 && rig > 0.002;
     MARK.uMark.value = 0;
-    if (G.pth.visible && PT.a0) {
+    if ((G.pth.visible || pt.drop > 0 || pt.glow > 0 || pt.img > 0) && PT.a0) {   // the map runs with the rig faded
       // ── beat 2: every shell appears, faint; then one bright shell runs out
       //    through them, laying its trace on the scene as it passes; then the
       //    faint shells go and the trace stays ─────────────────────────────
@@ -888,7 +974,7 @@ function boot() {
       //    point slides ALONG ITS OWN SHELL to the boresight (range kept),
       //    rising into its slot in the ring's column as it arrives ──────────
       const snFront = RTOP * 1.06 * pt.snap, SOFT = RB * 4;
-      const mk = pt.snap * 1e3 + pt.collapse;
+      const mk = pt.snap * 1e3 + pt.collapse + pt.drop * 7.3 + pt.glow * 0.37 + pt.real * 0.053 + pt.img * 0.0071;
       if (mk !== PT.mk) {
         PT.mk = mk;
         const a = PT.points.geometry.attributes.position, v = a.array, co = pt.collapse;
@@ -915,22 +1001,32 @@ function boot() {
             const rx = ox + DR[i3] * RD[i], ry = oy + DR[i3 + 1] * RD[i], rz = oz + DR[i3 + 2] * RD[i];
             x += px - rx; y += py - ry; z += pz - rz;
           }
+          if (pt.drop > 0) {                   // onto the range-azimuth plane, each on its own delay
+            let ud = Math.max(0, Math.min(1, pt.drop * 1.25 - PT.dly2[i] * 0.4)); ud = ud * ud * (3 - 2 * ud);
+            x += (PT.a3[i3] - x) * ud; y += (PT.a3[i3 + 1] - y) * ud; z += (PT.a3[i3 + 2] - z) * ud;
+          }
           v[i3] = x; v[i3 + 1] = y; v[i3 + 2] = z;
         }
         a.needsUpdate = true;
         // a 7.5 cm sprite would smear right across a bin: a snapped point is a
         // fifth smaller so the rings keep a gap between them, and a column
         // point a good deal smaller again
-        const sz = 0.075 * (1 - 0.2 * Math.min(1, pt.snap * 1.5)) * (1 - 0.6 * co), op = 1 - 0.65 * co;
-        let s = Math.min(1, co / 0.15); s = s * s * (3 - 2 * s);        // depth-tested -> untested
+        const sz = 0.075 * (1 - 0.2 * Math.min(1, pt.snap * 1.5)) * (1 - 0.6 * co), op = (1 - 0.65 * co) * (1 - pt.glow);
+        let s = Math.max(Math.min(1, co / 0.15), Math.min(1, pt.drop * 4)); s = s * s * (3 - 2 * s);   // depth-tested -> untested
+        { // the glow: each point's value runs from its local density to the rendered map's value at its spot
+          const cg = PT.glow.geometry.attributes.color, ca = cg.array, L = PT.hotLUT, rv = PT.realReady ? PT.realV : PT.dens;
+          for (let i = 0, n = PT.n; i < n; i++) { const vv = PT.dens[i] + (rv[i] - PT.dens[i]) * pt.real; const k = 3 * Math.max(0, Math.min(255, Math.round(vv * 255)));
+            ca[3 * i] = L[k]; ca[3 * i + 1] = L[k + 1]; ca[3 * i + 2] = L[k + 2]; }
+          cg.needsUpdate = true; PT.glow.geometry.setDrawRange(0, PT.points.geometry.drawRange.count);
+          PT.glow.material.opacity = 0.35 * pt.glow * (1 - pt.img); PT.glow.visible = PT.glow.material.opacity > 0.002; }
         // The sprite is mip-mapped: at this size its centre alpha samples at
         // ~0.6, so a fixed alphaTest of 0.5 discards every sprite once the
         // opacity is below ~0.8. The test follows the opacity instead.
         const m1 = PT.points.material, m2 = PT.points2.material;
         m1.size = sz; m1.opacity = op * (1 - s); m1.alphaTest = Math.max(0.01, 0.45 * m1.opacity); m1.transparent = true;
-        PT.points.visible = s < 0.999;
+        PT.points.visible = s < 0.999 && op > 0.002;
         m2.size = sz; m2.opacity = op * s; m2.alphaTest = Math.max(0.01, 0.45 * m2.opacity);
-        PT.points2.visible = s > 0.001;
+        PT.points2.visible = s > 0.001 && op > 0.002;
       }
 
       const axA = 0.85 * Math.min(1, pt.collapse * 4) * rig;
@@ -1249,6 +1345,22 @@ function boot() {
         await tween(1000, id, (t) => { S.pts.collapse = 1 - t; S.pts.snap = 1 - t;
                                        S.pts.fade = t; }, ease.io);
         await hold(400, id);
+        // 6 the range-azimuth map: the camera to bird's-eye; the points land on
+        //   the radar's plane and light up with their density; each runs to the
+        //   rendered map's value at its spot; the render fills in underneath;
+        //   a hold; and everything comes back for the dock shot
+        await camTo(VIEWS.ram, 2200, id);
+        await tween(2400, id, (t) => { S.pts.drop = t; S.pts.glow = Math.max(0, Math.min(1, (t - 0.25) / 0.6)); }, ease.lin);
+        await hold(300, id);
+        await tween(1600, id, (t) => { S.pts.real = t; }, ease.io);
+        await tween(1200, id, (t) => { S.pts.img = t; }, ease.io);
+        await hold(2000, id);
+        await tween(800, id, (t) => { S.pts.img = 1 - t; }, ease.io);
+        await tween(1000, id, (t) => { S.pts.real = 1 - t; }, ease.io);
+        await hold(200, id);
+        await tween(1200, id, (t) => { S.pts.drop = 1 - t; S.pts.glow = Math.max(0, Math.min(1, (1 - t - 0.25) / 0.6)); }, ease.lin);
+        await camTo(VIEWS.shot, 1400, id);
+        await hold(300, id);
         await addMarks(['3DPS'], id);
         await hold(250, id);
         await dockFly('pts', id);
