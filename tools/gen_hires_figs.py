@@ -196,6 +196,11 @@ elif WHICH == "teaser":
                      "panel_3dps_points.png"):
             darken_panel(os.path.join(src_dir, name),
                          os.path.join(tmp_dir, name))
+        # the two point-cloud application panels have their own dark renders
+        # (prep_teaser_cloud_panels.py): a darker mesh shade, unlifted normals
+        for name in ("panel_material", "panel_normals"):
+            shutil.copy2(os.path.join(src_dir, name + "_dark.png"),
+                         os.path.join(tmp_dir, name + ".png"))
         panel_args = ["--panel_dir", tmp_root]
 
     G = load_teaser()
